@@ -1,0 +1,221 @@
+@page "/books"
+@using System.ComponentModel.DataAnnotations
+@using System.Net.Http.Json
+@inject HttpClient Http
+
+<h3>Book Manager</h3>
+
+<EditForm EditContext="_editContext" OnValidSubmit="HandleValidSubmit">
+    <DataAnnotationsValidator />
+
+    <div>
+        <label for="title">Book Title</label>
+        <InputText id="title"
+                   data-testid="input-title"
+                   placeholder="Enter book title"
+                   class="form-control"
+                   @bind-Value="_book.Title" />
+        <ValidationMessage For="@(() => _book.Title)" data-testid="error-title" />
+    </div>
+
+    <div>
+        <label for="author">Author Name</label>
+        <InputText id="author"
+                   data-testid="input-author"
+                   placeholder="Enter author name"
+                   class="form-control"
+                   @bind-Value="_book.Author" />
+        <ValidationMessage For="@(() => _book.Author)" data-testid="error-author" />
+    </div>
+
+    <div>
+        <label for="isbn">ISBN Number</label>
+        <InputText id="isbn"
+                   data-testid="input-isbn"
+                   placeholder="Enter 13-digit ISBN number"
+                   class="form-control"
+                   @bind-Value="_book.Isbn" />
+        <ValidationMessage For="@(() => _book.Isbn)" data-testid="error-isbn" />
+    </div>
+
+    <div>
+        <label for="publicationDate">Publication Date</label>
+        <InputDate id="publicationDate"
+                   data-testid="input-publication-date"
+                   class="form-control"
+                   @bind-Value="_book.PublicationDate" />
+        <ValidationMessage For="@(() => _book.PublicationDate)" data-testid="error-publication-date" />
+    </div>
+
+    <div>
+        <label for="pages">Number of Pages</label>
+        <InputNumber id="pages"
+                     data-testid="input-pages"
+                     placeholder="Enter number of pages"
+                     class="form-control"
+                     @bind-Value="_book.NumberOfPages" />
+        <ValidationMessage For="@(() => _book.NumberOfPages)" data-testid="error-pages" />
+    </div>
+
+    <button type="submit"
+            data-testid="btn-submit-book"
+            disabled="@(!_isFormValid)">
+        Add Book
+    </button>
+</EditForm>
+
+<hr />
+
+<table data-testid="data-grid-books">
+    <thead>
+        <tr>
+            <th>Id</th>
+            <th>Title</th>
+            <th>Author</th>
+            <th>ISBN</th>
+            <th>Publication Date</th>
+            <th>Pages</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var b in _books)
+        {
+            <tr data-testid="@($"data-grid-row-{b.Id}")">
+                <td data-testid="@($"data-grid-cell-id-{b.Id}")">@b.Id</td>
+                <td data-testid="@($"data-grid-cell-title-{b.Id}")">@b.Title</td>
+                <td data-testid="@($"data-grid-cell-author-{b.Id}")">@b.Author</td>
+                <td data-testid="@($"data-grid-cell-isbn-{b.Id}")">@b.Isbn</td>
+                <td data-testid="@($"data-grid-cell-publication-date-{b.Id}")">@b.PublicationDate:yyyy-MM-dd</td>
+                <td data-testid="@($"data-grid-cell-pages-{b.Id}")">@b.NumberOfPages</td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+@code
+{
+    private ValidationMessageStore _messageStore;
+    private BookInputModel _book = new();
+    private List<Book> _books = new();
+    private EditContext _editContext;
+    private bool _isFormValid;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _editContext = new EditContext(_book);
+        _editContext.OnFieldChanged += (_, __) => ValidateForm();
+        _editContext.OnValidationStateChanged += (_, __) => ValidateForm();
+        _messageStore = new ValidationMessageStore(_editContext);
+        await LoadBooksAsync();
+    }
+
+    private async Task LoadBooksAsync()
+    {
+        var result = await Http.GetFromJsonAsync<List<Book>>("books") ?? new();
+        _books = result;
+        StateHasChanged();
+    }
+
+    private async Task HandleValidSubmit()
+    {
+        // Clear any server-side messages from previous attempt
+        _messageStore.Clear();
+        StateHasChanged();
+
+        var response = await Http.PostAsJsonAsync("books", _book);
+
+        if (response.IsSuccessStatusCode)
+        {
+            var created = await response.Content.ReadFromJsonAsync<Book>();
+            if (created is not null)
+            {
+                _books.Insert(0, created);          // newest on top
+            }
+
+            ResetForm();
+        }
+        else if (response.StatusCode == System.Net.HttpStatusCode.BadRequest)
+        {
+            // Attempt to deserialize validation errors
+            var errorsWrapper = await response.Content.ReadFromJsonAsync<ValidationErrorResponse>();
+
+            if (errorsWrapper?.Errors is not null)
+            {
+                foreach (var kvp in errorsWrapper.Errors)
+                {
+                    foreach (var msg in kvp.Value)
+                    {
+                        _messageStore.Add(_editContext.Field(kvp.Key), msg);
+                    }
+                }
+            }
+            _editContext.NotifyValidationStateChanged();
+        }
+    }
+
+    private void ResetForm()
+    {
+        _book = new();
+        _editContext = new EditContext(_book);
+        _editContext.OnFieldChanged += (_, __) => ValidateForm();
+        _editContext.OnValidationStateChanged += (_, __) => ValidateForm();
+        _messageStore.Clear();
+        _isFormValid = false;
+        StateHasChanged();
+    }
+
+    private void ValidateForm()
+    {
+        _isFormValid = _editContext.Validate();
+        StateHasChanged();
+    }
+
+    // ---------- Models ----------
+
+    public class Book
+    {
+        public int Id { get; set; }
+        public string Title { get; set; } = string.Empty;
+        public string Author { get; set; } = string.Empty;
+        public string Isbn { get; set; } = string.Empty;
+        public DateTime PublicationDate { get; set; }
+        public int NumberOfPages { get; set; }
+    }
+
+    public class BookInputModel
+    {
+        [Required, StringLength(100, MinimumLength = 2)]
+        public string Title { get; set; } = string.Empty;
+
+        [Required, StringLength(60, MinimumLength = 2)]
+        public string Author { get; set; } = string.Empty;
+
+        [Required, RegularExpression(@"^[0-9]{13}$", ErrorMessage = "ISBN must contain exactly 13 numeric digits.")]
+        public string Isbn { get; set; } = string.Empty;
+
+        [Required, PastOrTodayDate(ErrorMessage = "Publication Date cannot be in the future.")]
+        public DateTime PublicationDate { get; set; } = DateTime.Today;
+
+        [Required, Range(1, 5000)]
+        public int NumberOfPages { get; set; }
+    }
+
+    // ---------- Validation Helpers ----------
+
+    public class PastOrTodayDateAttribute : ValidationAttribute
+    {
+        public override bool IsValid(object? value)
+        {
+            if (value is DateTime dt)
+            {
+                return dt.Date <= DateTime.Today;
+            }
+            return true; // Let [Required] handle nulls
+        }
+    }
+
+    public class ValidationErrorResponse
+    {
+        public Dictionary<string, List<string>> Errors { get; set; } = new();
+    }
+}

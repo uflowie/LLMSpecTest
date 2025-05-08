@@ -1,0 +1,447 @@
+@page "/books-claude"
+@using System.ComponentModel.DataAnnotations
+@using System.Net.Http
+@using System.Net.Http.Json
+@using System.Text.Json
+@using System.Text.Json.Serialization
+@inject HttpClient Http
+
+<h1>Book Management</h1>
+
+<div class="book-form">
+    <h2>Add New Book</h2>
+    
+    <EditForm Model="@newBook" OnValidSubmit="@HandleValidSubmit">
+        <div class="form-group">
+            <label for="title">Book Title</label>
+            <input type="text" 
+                   id="title" 
+                   value="@newBook.Title"
+                   @oninput="@(e => HandleTitleInput(e))"
+                   @onblur="@(_ => ValidateField("Title"))"
+                   placeholder="Enter book title" 
+                   data-testid="input-title" />
+            @if (!string.IsNullOrEmpty(validationErrors.GetValueOrDefault("Title")))
+            {
+                <div class="validation-message" data-testid="error-title" role="alert">@validationErrors["Title"]</div>
+            }
+        </div>
+        
+        <div class="form-group">
+            <label for="author">Author Name</label>
+            <input type="text" 
+                   id="author" 
+                   value="@newBook.Author"
+                   @oninput="@(e => HandleAuthorInput(e))"
+                   @onblur="@(_ => ValidateField("Author"))"
+                   placeholder="Enter author name" 
+                   data-testid="input-author" />
+            @if (!string.IsNullOrEmpty(validationErrors.GetValueOrDefault("Author")))
+            {
+                <div class="validation-message" data-testid="error-author" role="alert">@validationErrors["Author"]</div>
+            }
+        </div>
+        
+        <div class="form-group">
+            <label for="isbn">ISBN Number</label>
+            <input type="text" 
+                   id="isbn" 
+                   value="@newBook.ISBN"
+                   @oninput="@(e => HandleISBNInput(e))"
+                   @onblur="@(_ => ValidateField("ISBN"))"
+                   placeholder="Enter 13-digit ISBN number" 
+                   data-testid="input-isbn" />
+            @if (!string.IsNullOrEmpty(validationErrors.GetValueOrDefault("ISBN")))
+            {
+                <div class="validation-message" data-testid="error-isbn" role="alert">@validationErrors["ISBN"]</div>
+            }
+        </div>
+        
+        <div class="form-group">
+            <label for="publication-date">Publication Date</label>
+            <input type="date" 
+                   id="publication-date" 
+                   value="@newBook.PublicationDate.ToString("yyyy-MM-dd")"
+                   @onchange="@(e => HandleDateInput(e))"
+                   @onblur="@(_ => ValidateField("PublicationDate"))"
+                   data-testid="input-publication-date" />
+            @if (!string.IsNullOrEmpty(validationErrors.GetValueOrDefault("PublicationDate")))
+            {
+                <div class="validation-message" data-testid="error-publication-date" role="alert">@validationErrors["PublicationDate"]</div>
+            }
+        </div>
+        
+        <div class="form-group">
+            <label for="pages">Number of Pages</label>
+            <input type="number" 
+                   id="pages" 
+                   value="@(newBook.NumberOfPages > 0 ? newBook.NumberOfPages.ToString() : "")"
+                   @oninput="@(e => HandlePagesInput(e))"
+                   @onblur="@(_ => ValidateField("NumberOfPages"))"
+                   placeholder="Enter number of pages" 
+                   data-testid="input-pages" />
+            @if (!string.IsNullOrEmpty(validationErrors.GetValueOrDefault("NumberOfPages")))
+            {
+                <div class="validation-message" data-testid="error-pages" role="alert">@validationErrors["NumberOfPages"]</div>
+            }
+        </div>
+        
+        <button type="submit" data-testid="btn-submit-book" disabled="@(!formIsValid)">Add Book</button>
+    </EditForm>
+</div>
+
+<div class="book-grid">
+    <h2>Book List</h2>
+    
+    @if (books.Count > 0)
+    {
+        <table data-testid="data-grid-books">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Title</th>
+                    <th>Author</th>
+                    <th>ISBN</th>
+                    <th>Publication Date</th>
+                    <th>Pages</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var book in books)
+                {
+                    <tr data-testid="data-grid-row-@book.Id">
+                        <td data-testid="data-grid-cell-id-@book.Id">@book.Id</td>
+                        <td data-testid="data-grid-cell-title-@book.Id">@book.Title</td>
+                        <td data-testid="data-grid-cell-author-@book.Id">@book.Author</td>
+                        <td data-testid="data-grid-cell-isbn-@book.Id">@book.ISBN</td>
+                        <td data-testid="data-grid-cell-publication-date-@book.Id">@book.PublicationDate.ToString("yyyy-MM-dd")</td>
+                        <td data-testid="data-grid-cell-pages-@book.Id">@book.NumberOfPages</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+    else
+    {
+        <p>No books available. Add your first book using the form above.</p>
+    }
+</div>
+
+<style>
+    .book-form {
+        margin-bottom: 2rem;
+        max-width: 600px;
+    }
+    
+    .form-group {
+        margin-bottom: 1rem;
+    }
+    
+    .form-group label {
+        display: block;
+        margin-bottom: 0.5rem;
+        font-weight: bold;
+    }
+    
+    .form-group input {
+        width: 100%;
+        padding: 0.5rem;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+    }
+    
+    .validation-message {
+        color: #dc3545;
+        font-size: 0.875rem;
+        margin-top: 0.25rem;
+    }
+    
+    button[type="submit"] {
+        padding: 0.5rem 1rem;
+        background-color: #007bff;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+    
+    button[type="submit"]:disabled {
+        background-color: #6c757d;
+        cursor: not-allowed;
+    }
+    
+    table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    
+    th, td {
+        padding: 0.75rem;
+        text-align: left;
+        border-bottom: 1px solid #dee2e6;
+    }
+    
+    th {
+        background-color: #f8f9fa;
+        font-weight: bold;
+    }
+    
+    tr:hover {
+        background-color: #f8f9fa;
+    }
+</style>
+
+@code {
+    // Model classes
+    public class BookInput
+    {
+        public string Title { get; set; } = string.Empty;
+        public string Author { get; set; } = string.Empty;
+        public string ISBN { get; set; } = string.Empty;
+        public DateTime PublicationDate { get; set; }
+        public int NumberOfPages { get; set; }
+    }
+    
+    public class Book
+    {
+        public int Id { get; set; }
+        public string Title { get; set; } = string.Empty;
+        public string Author { get; set; } = string.Empty;
+        public string ISBN { get; set; } = string.Empty;
+        public DateTime PublicationDate { get; set; }
+        public int NumberOfPages { get; set; }
+    }
+    
+    public class ValidationErrorResponse
+    {
+        public Dictionary<string, List<string>> Errors { get; set; } = new Dictionary<string, List<string>>();
+    }
+    
+    public class ErrorResponse
+    {
+        public string Error { get; set; } = string.Empty;
+    }
+    
+    private BookInput newBook = new BookInput();
+    private List<Book> books = new List<Book>();
+    private Dictionary<string, string> validationErrors = new Dictionary<string, string>();
+    private bool formIsValid = false;
+    
+    protected override async Task OnInitializedAsync()
+    {
+        newBook.PublicationDate = DateTime.Today; // Set default to today
+        await LoadBooks();
+        ValidateAllFields(); // Validate initially to set button state
+    }
+    
+    private async Task LoadBooks()
+    {
+        try
+        {
+            books = await Http.GetFromJsonAsync<List<Book>>("http://localhost:5000/books") ?? new List<Book>();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading books: {ex.Message}");
+            books = new List<Book>();
+        }
+    }
+    
+    private void HandleTitleInput(ChangeEventArgs e)
+    {
+        newBook.Title = e.Value?.ToString() ?? string.Empty;
+        ValidateField("Title");
+    }
+    
+    private void HandleAuthorInput(ChangeEventArgs e)
+    {
+        newBook.Author = e.Value?.ToString() ?? string.Empty;
+        ValidateField("Author");
+    }
+    
+    private void HandleISBNInput(ChangeEventArgs e)
+    {
+        newBook.ISBN = e.Value?.ToString() ?? string.Empty;
+        ValidateField("ISBN");
+    }
+    
+    private void HandleDateInput(ChangeEventArgs e)
+    {
+        if (DateTime.TryParse(e.Value?.ToString(), out DateTime date))
+        {
+            newBook.PublicationDate = date;
+        }
+        ValidateField("PublicationDate");
+    }
+    
+    private void HandlePagesInput(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int pages))
+        {
+            newBook.NumberOfPages = pages;
+        }
+        else
+        {
+            newBook.NumberOfPages = 0; // Invalid state to trigger validation
+        }
+        ValidateField("NumberOfPages");
+    }
+    
+    private void ValidateField(string fieldName)
+    {
+        switch(fieldName)
+        {
+            case "Title":
+                if (string.IsNullOrWhiteSpace(newBook.Title))
+                {
+                    validationErrors["Title"] = "Title is required.";
+                }
+                else if (newBook.Title.Length < 2 || newBook.Title.Length > 100)
+                {
+                    validationErrors["Title"] = "Title must be between 2 and 100 characters.";
+                }
+                else
+                {
+                    validationErrors.Remove("Title");
+                }
+                break;
+                
+            case "Author":
+                if (string.IsNullOrWhiteSpace(newBook.Author))
+                {
+                    validationErrors["Author"] = "Author name is required.";
+                }
+                else if (newBook.Author.Length < 2 || newBook.Author.Length > 60)
+                {
+                    validationErrors["Author"] = "Author name must be between 2 and 60 characters.";
+                }
+                else
+                {
+                    validationErrors.Remove("Author");
+                }
+                break;
+                
+            case "ISBN":
+                if (string.IsNullOrWhiteSpace(newBook.ISBN))
+                {
+                    validationErrors["ISBN"] = "ISBN is required.";
+                }
+                else if (!System.Text.RegularExpressions.Regex.IsMatch(newBook.ISBN, "^[0-9]{13}$"))
+                {
+                    validationErrors["ISBN"] = "ISBN must contain exactly 13 numeric digits.";
+                }
+                else
+                {
+                    validationErrors.Remove("ISBN");
+                }
+                break;
+                
+            case "PublicationDate":
+                if (newBook.PublicationDate > DateTime.Today)
+                {
+                    validationErrors["PublicationDate"] = "Publication Date cannot be in the future.";
+                }
+                else
+                {
+                    validationErrors.Remove("PublicationDate");
+                }
+                break;
+                
+            case "NumberOfPages":
+                if (newBook.NumberOfPages < 1)
+                {
+                    validationErrors["NumberOfPages"] = "Number of pages is required and must be greater than 0.";
+                }
+                else if (newBook.NumberOfPages > 5000)
+                {
+                    validationErrors["NumberOfPages"] = "Number of pages must be between 1 and 5000.";
+                }
+                else
+                {
+                    validationErrors.Remove("NumberOfPages");
+                }
+                break;
+        }
+        
+        // Update form validity state
+        formIsValid = !validationErrors.Any();
+    }
+    
+    private void ValidateAllFields()
+    {
+        ValidateField("Title");
+        ValidateField("Author");
+        ValidateField("ISBN");
+        ValidateField("PublicationDate");
+        ValidateField("NumberOfPages");
+    }
+    
+    private async Task HandleValidSubmit()
+    {
+        try
+        {
+            // Final validation check before submission
+            ValidateAllFields();
+            if (!formIsValid)
+            {
+                return;
+            }
+            
+            // Send POST request to API
+            var response = await Http.PostAsJsonAsync("http://localhost:5000/books", newBook);
+            
+            if (response.IsSuccessStatusCode)
+            {
+                // Add new book to the list (assuming the API returns the created book)
+                var createdBook = await response.Content.ReadFromJsonAsync<Book>();
+                if (createdBook != null)
+                {
+                    books.Insert(0, createdBook); // Add at the beginning (newest first)
+                }
+                
+                // Reset form
+                newBook = new BookInput
+                {
+                    PublicationDate = DateTime.Today // Reset with default date
+                };
+                StateHasChanged();
+            }
+            else if (response.StatusCode == System.Net.HttpStatusCode.BadRequest)
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                try
+                {
+                    // Try to parse validation errors from API
+                    var validationResponse = JsonSerializer.Deserialize<ValidationErrorResponse>(errorContent);
+                    if (validationResponse != null && validationResponse.Errors != null)
+                    {
+                        foreach (var error in validationResponse.Errors)
+                        {
+                            if (error.Value.Count > 0)
+                            {
+                                validationErrors[error.Key] = error.Value[0];
+                            }
+                        }
+                    }
+                }
+                catch
+                {
+                    // If we can't parse validation errors, try to get general error
+                    try
+                    {
+                        var errorResponse = JsonSerializer.Deserialize<ErrorResponse>(errorContent);
+                        Console.WriteLine($"API Error: {errorResponse?.Error}");
+                    }
+                    catch
+                    {
+                        Console.WriteLine("Could not parse error response");
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error submitting form: {ex.Message}");
+        }
+    }
+}

@@ -1,95 +1,114 @@
 #!/usr/bin/env python3
 """
-This script creates a prompt file by combining the spec.md and openapi.yaml files,
-and adding instructions for the LLM on what to do.
+This script creates a prompt file by combining a spec markdown file and an OpenAPI YAML file,
+and adding framework-agnostic instructions for the LLM.
 """
 
 import os
-import yaml
-import json
+import argparse
 
-# Define file paths
-SPEC_PATH = "spec.md"
-OPENAPI_PATH = "server/openapi.yaml"
-OUTPUT_PATH = "prompts/blazor_implementation_prompt.md"
+# Default file paths (can be overridden by CLI args)
+DEFAULT_SPEC_PATH = "spec.md"
+DEFAULT_OPENAPI_PATH = "server/openapi.yaml"
+DEFAULT_OUTPUT_PATH = "prompts/{framework}_implementation_prompt.md"
 
-def read_file(file_path):
-    """Read the contents of a file."""
-    with open(file_path, 'r', encoding='utf-8') as file:
-        return file.read()
 
-def create_prompt_file():
-    """Create a prompt file from spec and OpenAPI file."""
-    # Create prompts directory if it doesn't exist
-    os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
-    
-    # Read the spec.md file
-    spec_content = read_file(SPEC_PATH)
-    
-    # Read the OpenAPI file
-    openapi_content = read_file(OPENAPI_PATH)
-    
-    # Parse YAML to extract important schema information
-    openapi_data = yaml.safe_load(openapi_content)
-    book_schema = openapi_data.get('components', {}).get('schemas', {}).get('Book', {})
-    book_input_schema = openapi_data.get('components', {}).get('schemas', {}).get('BookInput', {})
-    
-    # Format the JSON schema in a readable way
-    book_schema_str = json.dumps(book_schema, indent=2)
-    book_input_schema_str = json.dumps(book_input_schema, indent=2)
-    
-    # Create the prompt content
-    prompt_content = f"""# Blazor Book Management Implementation Task
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Generate a prompt file for LLM-based implementation tasks."
+    )
+    parser.add_argument(
+        '-f', '--framework',
+        required=True,
+        help="Name of the target framework (e.g., Blazor, React, Vue)",
+    )
+    parser.add_argument(
+        '--spec-path',
+        default=DEFAULT_SPEC_PATH,
+        help=f"Path to the spec markdown file (default: {DEFAULT_SPEC_PATH})"
+    )
+    parser.add_argument(
+        '--openapi-path',
+        default=DEFAULT_OPENAPI_PATH,
+        help=f"Path to the OpenAPI YAML file (default: {DEFAULT_OPENAPI_PATH})"
+    )
+    parser.add_argument(
+        '--output-path',
+        help="Path to write the generated prompt file. ``{framework}`` in the path will be replaced."
+    )
+    return parser.parse_args()
 
-## Task Overview
 
-Implement a Blazor WebAssembly component that provides a form for creating book entries and a data grid to display them.
-The implementation should follow the specification and use the API defined in the OpenAPI document below. Do not use any third-party libraries for the form or data grid.
+def read_file(path: str) -> str:
+    """Read and return the contents of a text file."""
+    with open(path, 'r', encoding='utf-8') as f:
+        return f.read()
 
-## Specifications
 
-### UI/UX Specification
-```markdown
-{spec_content}
-```
+def create_prompt_file(framework: str, spec_path: str, openapi_path: str, output_path: str):
+    """
+    Generate the prompt content based on the given framework and write it to output_path.
+    """
+    # Prepare output directory
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
-### API Specification
-The backend API is defined by the following OpenAPI schema:
+    # Read inputs
+    spec_content = read_file(spec_path)
+    openapi_content = read_file(openapi_path)
 
-Book Schema:
-```json
-{book_schema_str}
-```
+    # Build prompt
+    title = f"{framework} Book Management Implementation Task"
+    overview = (
+        f"Implement a {framework} component that provides a form for creating book entries "
+        "and a data grid to display them. The implementation should follow the specification "
+        "and use the API defined in the OpenAPI document below. Do not use any third-party "
+        "libraries for the form or data grid. There are no pre-installed CSS libraries."
+    )
 
-BookInput Schema (used for POST requests):
-```json
-{book_input_schema_str}
-```
+    requirements = [
+        f"Create a {framework} component that implements the form according to the specification.",
+        "Implement client-side validation as described in the spec.",
+        "Connect to the API to submit new books and retrieve the book list.",
+        f"Implement the data grid in {framework} as specified.",
+        "Ensure all data-testid attributes are correctly set for testing.",
+        "Make sure the form follows best practices for accessibility.",
+        "Output only a single file."
+    ]
 
-## Implementation Requirements
+    prompt_lines = [
+        f"# {title}",
+        "## Task Overview",
+        overview,
+        "## Specifications",
+        "### UI/UX Specification",
+        "```markdown",
+        spec_content.strip(),
+        "```",
+        "### API Specification",
+        "The backend API is defined by the following OpenAPI YAML:",
+        "```yaml",
+        openapi_content.strip(),
+        "```",
+        "## Implementation Requirements",
+    ]
+    for idx, req in enumerate(requirements, 1):
+        prompt_lines.append(f"{idx}. {req}")
 
-1. Create a Blazor component that implements the form according to the specification
-2. Implement client-side validation as described in the spec
-3. Connect to the API to submit new books and retrieve the book list
-4. Implement the data grid as specified
-5. Ensure all data-testid attributes are correctly set for testing
-6. Make sure the form follows best practices for accessibility
-7. Implement proper error handling for API communication
+    prompt_content = "\n".join(prompt_lines)
 
-## Deliverables
+    # Write out
+    with open(output_path, 'w', encoding='utf-8') as out_file:
+        out_file.write(prompt_content)
 
-1. A single Blazor component file (.razor) that implements the book form and data grid
-2. Any necessary service classes for API communication
-3. Any required model classes
+    print(f"Prompt file created at {output_path}")
 
-Please implement a clean, maintainable solution using Blazor best practices.
-"""
-
-    # Write the prompt content to a file
-    with open(OUTPUT_PATH, 'w', encoding='utf-8') as file:
-        file.write(prompt_content)
-    
-    print(f"Prompt file created at {OUTPUT_PATH}")
 
 if __name__ == "__main__":
-    create_prompt_file()
+    args = parse_args()
+    framework = args.framework
+    spec_path = args.spec_path
+    openapi_path = args.openapi_path
+    default_out = DEFAULT_OUTPUT_PATH.format(framework=framework.lower())
+    output_path = args.output_path or default_out
+
+    create_prompt_file(framework, spec_path, openapi_path, output_path)
