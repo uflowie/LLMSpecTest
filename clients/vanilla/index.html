@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Book Entry</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px auto;
+      max-width: 800px;
+    }
+    h1 {
+      text-align: center;
+    }
+    form {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px 20px;
+      margin-bottom: 20px;
+    }
+    .field {
+      display: flex;
+      flex-direction: column;
+    }
+    label {
+      font-weight: bold;
+      margin-bottom: 5px;
+    }
+    input {
+      padding: 8px;
+      font-size: 1rem;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    input:disabled {
+      background: #eee;
+    }
+    .error {
+      color: red;
+      font-size: 0.9em;
+      height: 1.2em;
+      margin-top: 2px;
+    }
+    button {
+      grid-column: span 2;
+      padding: 10px;
+      font-size: 1rem;
+      border: none;
+      border-radius: 4px;
+      background: #007bff;
+      color: white;
+      cursor: pointer;
+    }
+    button:disabled {
+      background: #aaa;
+      cursor: not-allowed;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th, td {
+      padding: 8px;
+      border: 1px solid #ddd;
+      text-align: left;
+    }
+    tbody tr:nth-child(even) {
+      background: #f9f9f9;
+    }
+  </style>
+</head>
+<body>
+  <h1>Book Entry</h1>
+  <form id="book-form">
+    <div class="field">
+      <label for="title">Title</label>
+      <input type="text" id="title" name="title" placeholder="Enter book title">
+      <span class="error" id="title-error"></span>
+    </div>
+    <div class="field">
+      <label for="author">Author</label>
+      <input type="text" id="author" name="author" placeholder="Enter author name">
+      <span class="error" id="author-error"></span>
+    </div>
+    <div class="field">
+      <label for="isbn">ISBN</label>
+      <input type="text" id="isbn" name="isbn" placeholder="Enter 13-digit ISBN number">
+      <span class="error" id="isbn-error"></span>
+    </div>
+    <div class="field">
+      <label for="publication_date">Publication Date</label>
+      <input type="date" id="publication_date" name="publication_date">
+      <span class="error" id="publication_date-error"></span>
+    </div>
+    <div class="field">
+      <label for="number_of_pages">Number of Pages</label>
+      <input type="number" id="number_of_pages" name="number_of_pages" placeholder="Enter number of pages" min="1" max="5000">
+      <span class="error" id="number_of_pages-error"></span>
+    </div>
+    <button type="submit" id="submit-btn" disabled>Add Book</button>
+  </form>
+  <table id="books-table">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Title</th>
+        <th>Author</th>
+        <th>ISBN</th>
+        <th>Publication Date</th>
+        <th>Pages</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <script>
+    const apiUrl = 'http://localhost:5000/books';
+    const form = document.getElementById('book-form');
+    const submitBtn = document.getElementById('submit-btn');
+    const fields = ['title', 'author', 'isbn', 'publication_date', 'number_of_pages'];
+    const errors = {};
+
+    // Set max date for publication_date to today
+    const pubDateInput = document.getElementById('publication_date');
+    const today = new Date().toISOString().split('T')[0];
+    pubDateInput.setAttribute('max', today);
+
+    // Validation functions
+    function validateTitle() {
+      const val = document.getElementById('title').value.trim();
+      if (!val) return 'Title is required';
+      if (val.length < 2 || val.length > 100) return 'Title must be between 2 and 100 characters';
+      return '';
+    }
+    function validateAuthor() {
+      const val = document.getElementById('author').value.trim();
+      if (!val) return 'Author is required';
+      if (val.length < 2 || val.length > 60) return 'Author name must be between 2 and 60 characters';
+      return '';
+    }
+    function validateISBN() {
+      const val = document.getElementById('isbn').value.trim();
+      if (!val) return 'ISBN is required';
+      if (!/^[0-9]{13}$/.test(val)) return 'ISBN must contain exactly 13 numeric digits';
+      return '';
+    }
+    function validatePubDate() {
+      const val = document.getElementById('publication_date').value;
+      if (!val) return 'Publication Date is required';
+      if (new Date(val) > new Date()) return 'Publication Date cannot be in the future';
+      return '';
+    }
+    function validatePages() {
+      const val = document.getElementById('number_of_pages').value;
+      if (!val) return 'Number of Pages is required';
+      const num = parseInt(val, 10);
+      if (isNaN(num) || num < 1 || num > 5000) return 'Number of pages must be between 1 and 5000';
+      return '';
+    }
+
+    const validators = {
+      title: validateTitle,
+      author: validateAuthor,
+      isbn: validateISBN,
+      publication_date: validatePubDate,
+      number_of_pages: validatePages
+    };
+
+    fields.forEach(field => {
+      const input = document.getElementById(field);
+      const errorEl = document.getElementById(`${field}-error`);
+      input.addEventListener('input', () => handleValidation(field, input, errorEl));
+      input.addEventListener('blur',  () => handleValidation(field, input, errorEl));
+    });
+
+    function handleValidation(field, input, errorEl) {
+      const errMsg = validators[field]();
+      errors[field] = errMsg;
+      errorEl.textContent = errMsg;
+      toggleSubmit();
+    }
+
+    function toggleSubmit() {
+      const hasErrors = Object.values(errors).some(msg => msg);
+      const allFilled = fields.every(f => document.getElementById(f).value);
+      submitBtn.disabled = hasErrors || !allFilled;
+    }
+
+    // Fetch existing books on load
+    async function loadBooks() {
+      try {
+        const res = await fetch(apiUrl);
+        if (!res.ok) throw new Error('Failed to fetch books');
+        const books = await res.json();
+        books.forEach(book => addBookToTable(book, false));
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    function addBookToTable(book, prepend = true) {
+      const tbody = document.querySelector('#books-table tbody');
+      const row = document.createElement('tr');
+      row.innerHTML = `
+        <td>${book.id}</td>
+        <td>${book.title}</td>
+        <td>${book.author}</td>
+        <td>${book.isbn}</td>
+        <td>${book.publication_date}</td>
+        <td>${book.number_of_pages}</td>
+      `;
+      if (prepend && tbody.firstChild) tbody.insertBefore(row, tbody.firstChild);
+      else tbody.appendChild(row);
+    }
+
+    form.addEventListener('submit', async e => {
+      e.preventDefault();
+      const data = {
+        title: document.getElementById('title').value.trim(),
+        author: document.getElementById('author').value.trim(),
+        isbn: document.getElementById('isbn').value.trim(),
+        publication_date: document.getElementById('publication_date').value,
+        number_of_pages: parseInt(document.getElementById('number_of_pages').value, 10)
+      };
+      try {
+        const res = await fetch(apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        if (res.status === 400) {
+          const errRes = await res.json();
+          if (errRes.errors) {
+            Object.keys(errRes.errors).forEach(field => {
+              const msg = errRes.errors[field].join(' ');
+              document.getElementById(`${field}-error`).textContent = msg;
+              errors[field] = msg;
+            });
+            toggleSubmit();
+            return;
+          }
+          throw new Error(errRes.error || 'Validation error');
+        }
+        if (res.status !== 201) throw new Error('Failed to add book');
+        const newBook = await res.json();
+        addBookToTable(newBook, true);
+        form.reset();
+        fields.forEach(f => document.getElementById(`${f}-error`).textContent = '');
+        Object.keys(errors).forEach(k => errors[k] = '');
+        toggleSubmit();
+      } catch (err) {
+        console.error(err);
+        alert('Error adding book. Please try again.');
+      }
+    });
+
+    window.addEventListener('DOMContentLoaded', loadBooks);
+  </script>
+</body>
+</html>
