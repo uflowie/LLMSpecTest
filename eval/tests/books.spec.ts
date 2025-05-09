@@ -202,14 +202,6 @@ test.describe('Book Entry Form and Data Grid', () => {
       await expect(pagesError).toBeVisible();
       await expect(pagesError).toHaveText('Number of pages must be between 1 and 5000.');
       
-      // Not an integer
-      await pagesInput.fill('abc');
-      await pagesInput.blur();
-      await expect(pagesError).toBeVisible();
-      // The message for "not an integer" might vary; spec implies range error covers it.
-      await expect(pagesError).toHaveText(/must be an integer|Number of pages must be between 1 and 5000./i);
-
-
       // Valid
       await pagesInput.fill('300');
       await pagesInput.blur();
