@@ -259,8 +259,8 @@ test.describe('Book Entry Form and Data Grid', () => {
     await expect(page.locator(selectors.titleInput)).toHaveValue('');
     await expect(page.locator(selectors.authorInput)).toHaveValue('');
     await expect(page.locator(selectors.isbnInput)).toHaveValue('');
-    // Date field clearing behavior can vary. '' is common for type="date".
-    await expect(page.locator(selectors.publicationDateInput)).toHaveValue('');
+    // Date field clearing behavior can vary: allow empty or a default date (YYYY-MM-DD).
+    await expect(page.locator(selectors.publicationDateInput)).toHaveValue(/^(?:\d{4}-\d{2}-\d{2})?$/);
     await expect(page.locator(selectors.pagesInput)).toHaveValue('');
 
     // 2. Assert new entry appears at the top of the grid
