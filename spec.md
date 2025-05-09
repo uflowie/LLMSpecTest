@@ -2,107 +2,93 @@
 
 ## Overview
 
-This specification defines a UI form and data grid for managing a **Book** resource. It includes enhanced selectors and structure to support automated testing with Playwright.
+This specification defines a UI form and data grid for managing a **Book** resource. It includes enhanced selectors and structure to support automated testing with Playwright. The goal is to ensure all interactive elements are easily and reliably selectable and that behaviors are clearly defined for testing.
 
 ---
 
-## 1. Resource Definition
+## 1. Book Form Specification
 
-### Fields
+This section details the input fields, submission button, and general behavior of the book entry form.
 
-Each book entry must include the following fields:
+### 1.1. Fields
 
-| Field            | Type    | Validation                           |
-| ---------------- | ------- | ------------------------------------ |
-| title            | String  | Required, 2-100 characters           |
-| author           | String  | Required, 2-60 characters            |
-| isbn             | String  | Required, numeric, exactly 13 digits |
-| publication_date | Date    | Required, cannot be a future date    |
-| number_of_pages  | Integer | Required, integer between 1 and 5000 |
+Each book entry requires the following fields. Each input must have an associated accessible label and specific `data-testid` attributes for the input element and its corresponding validation error message area.
 
----
+| Field Name        | Data Type | Validation Rules                     | Form Label       | Input `data-testid`      | Placeholder Text             | Error `data-testid`      | Example Error Message                           |
+|-------------------|-----------|--------------------------------------|------------------|--------------------------|------------------------------|--------------------------|-------------------------------------------------|
+| `title`           | String    | Required, 2-100 characters           | Book Title       | `input-title`            | Enter book title             | `error-title`            | Title must be between 2 and 100 characters.     |
+| `author`          | String    | Required, 2-60 characters            | Author Name      | `input-author`           | Enter author name            | `error-author`           | Author name must be between 2 and 60 characters.|
+| `isbn`            | String    | Required, numeric, exactly 13 digits | ISBN Number      | `input-isbn`             | Enter 13-digit ISBN number   | `error-isbn`             | ISBN must contain exactly 13 numeric digits.    |
+| `publication_date`| Date      | Required, cannot be a future date    | Publication Date | `input-publication-date` | *(date picker placeholder)* | `error-publication-date` | Publication Date cannot be in the future.       |
+| `number_of_pages` | Integer   | Required, integer between 1 and 5000 | Number of Pages  | `input-pages`            | Enter number of pages        | `error-pages`            | Number of pages must be between 1 and 5000.     |
 
-## 2. Form Specification
+### 1.2. Submit Button
 
-### Form Fields
+| Element        | Label    | `data-testid`     |
+|----------------|----------|-------------------|
+| Submit Button  | Add Book | `btn-submit-book` |
 
-Each input must have a `data-testid` and accessible label:
+**Behavior:**
+* The submit button must be **disabled** if any form validation errors are present or if any required fields are empty.
+* The submit button must be **enabled** only when all input fields are valid according to their specified validation rules.
 
-| Field            | Label            | data-testid              | Placeholder                |
-| ---------------- | ---------------- | ------------------------ | -------------------------- |
-| title            | Book Title       | `input-title`            | Enter book title           |
-| author           | Author Name      | `input-author`           | Enter author name          |
-| isbn             | ISBN Number      | `input-isbn`             | Enter 13-digit ISBN number |
-| publication_date | Publication Date | `input-publication-date` | (date picker placeholder)  |
-| number_of_pages  | Number of Pages  | `input-pages`            | Enter number of pages      |
-| Submit Button    | Add Book         | `btn-submit-book`        | (button text)              |
-
-### Validation Errors
-
-Each validation message must have a corresponding `data-testid`:
-
-| Field            | data-testid              | Example Message                                  |
-| ---------------- | ------------------------ | ------------------------------------------------ |
-| title            | `error-title`            | Title must be between 2 and 100 characters.      |
-| author           | `error-author`           | Author name must be between 2 and 60 characters. |
-| isbn             | `error-isbn`             | ISBN must contain exactly 13 numeric digits.     |
-| publication_date | `error-publication-date` | Publication Date cannot be in the future.        |
-| number_of_pages  | `error-pages`            | Number of pages must be between 1 and 5000.      |
-
-### Submit Button
-
-* Must use `data-testid="btn-submit-book"`
-* Disabled when form has any validation errors
-* Enabled only when all fields are valid
+### 1.3. General Form Behavior
+* **Validation Trigger:** Input field validations must trigger on both `blur` and `input` (or `change`) events to provide real-time feedback.
+* **Submission Outcome:**
+    * Upon successful submission, all form inputs must be cleared.
+    * The UI must prevent the submission of forms with invalid data (primarily enforced by the submit button's state).
+* **Error Display:** Validation error messages, as defined in the Fields table, must be displayed adjacent to or below their respective fields when validation fails.
 
 ---
 
-## 3. Data Grid Specification
+## 2. Book Data Grid Specification
 
-### Structure
+This section defines the structure and behavior of the data grid displaying book entries.
 
-Data grid displays all entries with the following columns:
+### 2.1. Structure
 
-| Column           | Data-testid Pattern                          |
-| ---------------- | -------------------------------------------- |
-| id               | `data-grid-cell-id-<entry-id>`               |
-| title            | `data-grid-cell-title-<entry-id>`            |
-| author           | `data-grid-cell-author-<entry-id>`           |
-| isbn             | `data-grid-cell-isbn-<entry-id>`             |
-| publication_date | `data-grid-cell-publication-date-<entry-id>` |
-| number_of_pages  | `data-grid-cell-pages-<entry-id>`            |
+* **Grid Container:** The main data grid table or container element must have `data-testid="data-grid-books"`.
+* **Grid Rows:** Each row representing a single book entry must have a `data-testid` following the pattern `data-grid-row-<entry-id>`, where `<entry-id>` is a unique identifier for the book.
 
-The full grid table uses `data-testid="data-grid-books"` and each row `data-testid="data-grid-row-<entry-id>"`.
+### 2.2. Column and Cell Definitions
 
-### Behavior
+The data grid must display all submitted book entries with the following columns. Each cell must have a `data-testid` for precise targeting.
 
-* Grid must show all stored book entries
-* New entries appear at the top immediately upon successful form submission
-* No manual refresh should be required
+| Displayed Column Header | Source Field (from Book Resource) | Cell `data-testid` Pattern                     |
+|-------------------------|-----------------------------------|------------------------------------------------|
+| ID                      | `id` (unique entry identifier)    | `data-grid-cell-id-<entry-id>`                 |
+| Title                   | `title`                           | `data-grid-cell-title-<entry-id>`              |
+| Author                  | `author`                          | `data-grid-cell-author-<entry-id>`             |
+| ISBN                    | `isbn`                            | `data-grid-cell-isbn-<entry-id>`               |
+| Publication Date        | `publication_date`                | `data-grid-cell-publication-date-<entry-id>` |
+| Pages                   | `number_of_pages`                 | `data-grid-cell-pages-<entry-id>`             |
 
----
-
-## 4. Functional Behavior for Testing
-
-* [ ] Form renders with all 5 inputs and a submit button
-* [ ] Validations trigger on blur and change
-* [ ] Submit button disabled when validation errors exist
-* [ ] Submit button enabled when all inputs are valid
-* [ ] Form clears inputs upon successful submission
-* [ ] Data grid updates with new entry (newest on top)
-* [ ] All data-testid values exist as described above
-* [ ] UI prevents submission of invalid forms
-* [ ] No unexpected crashes on repeated input and submission
+### 2.3. Behavior
+* **Data Display:** The grid must accurately display all successfully submitted book entries.
+* **Real-time Update:** New entries must appear in the data grid immediately after successful form submission.
+* **Sorting Order:** New entries should appear at the **top** of the grid.
+* **No Manual Refresh:** The grid update must occur automatically without requiring any manual user action (e.g., a refresh button).
 
 ---
 
-## 5. Automation Readiness Notes
+## 3. Key Functional Test Scenarios Checklist
 
-* Use `data-testid` attributes for all critical elements
-* Use consistent HTML structure for repeatable Playwright selectors
-* Label and error text must be user-friendly and exact per specification
-* Grid IDs should be auto-generated or simulated consistently for testing
+This checklist outlines critical functionalities to be verified through automated testing.
+
+* [ ] **Form Rendering:** The form renders completely with all five specified input fields and the "Add Book" submit button.
+* [ ] **Input Validation & Error Display:**
+    * Validation messages trigger correctly on `blur` and `input`/`change` events for each field.
+    * Error messages match the specified text and use the correct `data-testid`.
+* [ ] **Submit Button State:**
+    * The submit button is initially disabled (if fields are empty and required).
+    * The submit button becomes enabled when all fields are filled with valid data.
+    * The submit button becomes disabled if any field becomes invalid.
+* [ ] **Successful Submission Flow:**
+    * Submitting a valid form clears all input fields.
+    * The newly submitted book appears as the first entry (at the top) in the data grid.
+    * Data in the grid correctly matches the submitted data.
+* [ ] **Invalid Submission Prevention:** The UI prevents form submission when data is invalid (submit button should be disabled).
+* [ ] **`data-testid` Presence:** All `data-testid` attributes specified in this document are present on the correct elements in the rendered UI.
+* [ ] **Application Stability:** The application remains stable and handles repeated inputs, submissions, and validation triggers without unexpected errors or crashes.
 
 ---
-
-This specification ensures a fully testable UI via Playwright with deterministic selectors and behaviors.
