@@ -1,3 +1,9 @@
+# Angular Book Management Implementation Task
+## Task Overview
+Implement a Angular component that provides a form for creating book entries and a data grid to display them. The implementation should follow the specification and use the API defined in the OpenAPI document below. Do not use any third-party libraries for the form or data grid. There are no pre-installed CSS libraries. Create the component as a stand-alone component. Name the component ClaudeComponent.
+## Specifications
+### UI/UX Specification
+```markdown
 # Book Entry Form and Data Grid Specification (Playwright-Testable)
 
 ## Overview
@@ -93,3 +99,163 @@ This checklist outlines critical functionalities to be verified through automate
 * [ ] **`data-testid` Presence:** All `data-testid` attributes specified in this document are present on the correct elements in the rendered UI.
 
 ---
+```
+### API Specification
+The backend API is defined by the following OpenAPI YAML:
+```yaml
+openapi: 3.0.0
+info:
+  title: Book Entry API
+  version: "1.0.0"
+  description: |
+    A simple in-memory API to create and list Book entries.
+servers:
+  - url: http://localhost:5000
+paths:
+  /books:
+    get:
+      summary: List all books
+      description: Returns all book entries, ordered newest first.
+      responses:
+        "200":
+          description: A JSON array of Book objects
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Book'
+    post:
+      summary: Create a new book
+      description: Creates a new book entry after validating all fields.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BookInput'
+      responses:
+        "201":
+          description: The created Book object
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Book'
+        "400":
+          description: Validation errors or bad request
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ValidationErrorResponse'
+                  - $ref: '#/components/schemas/ErrorResponse'
+components:
+  schemas:
+    Book:
+      type: object
+      required:
+        - id
+        - title
+        - author
+        - isbn
+        - publication_date
+        - number_of_pages
+      properties:
+        id:
+          type: integer
+          example: 1
+        title:
+          type: string
+          minLength: 2
+          maxLength: 100
+          example: "A Tale of Two Cities"
+        author:
+          type: string
+          minLength: 2
+          maxLength: 60
+          example: "Charles Dickens"
+        isbn:
+          type: string
+          pattern: '^[0-9]{13}$'
+          example: "1234567890123"
+        publication_date:
+          type: string
+          format: date
+          example: "1859-04-30"
+        number_of_pages:
+          type: integer
+          minimum: 1
+          maximum: 5000
+          example: 341
+
+    BookInput:
+      type: object
+      required:
+        - title
+        - author
+        - isbn
+        - publication_date
+        - number_of_pages
+      properties:
+        title:
+          type: string
+          minLength: 2
+          maxLength: 100
+          example: "A Tale of Two Cities"
+        author:
+          type: string
+          minLength: 2
+          maxLength: 60
+          example: "Charles Dickens"
+        isbn:
+          type: string
+          pattern: '^[0-9]{13}$'
+          example: "1234567890123"
+        publication_date:
+          type: string
+          format: date
+          example: "1859-04-30"
+        number_of_pages:
+          type: integer
+          minimum: 1
+          maximum: 5000
+          example: 341
+
+    ValidationErrorResponse:
+      type: object
+      required:
+        - errors
+      properties:
+        errors:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+          description: |
+            A map of field names to a list of validation error messages.
+          example:
+            title:
+              - "Title is required."
+              - "Title must be between 2 and 100 characters."
+            isbn:
+              - "ISBN must contain exactly 13 numeric digits."
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: A general error message for non-validation failures.
+          example: "Request body must be JSON"
+```
+## Implementation Requirements
+1. Create a Angular component that implements the form according to the specification.
+2. Implement client-side validation as described in the spec.
+3. Connect to the API to submit new books and retrieve the book list.
+4. Implement the data grid in Angular as specified.
+5. Ensure all data-testid attributes are correctly set for testing.
+6. Make sure the form follows best practices for accessibility.
+7. Output only a single file.

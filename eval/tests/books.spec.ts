@@ -46,8 +46,8 @@ test.describe('Book Entry Form and Data Grid', () => {
     getFirstRowInGrid: () => `${selectors.dataGrid} [data-testid^="data-grid-row-"] >> nth=0`,
   };
 
-  test.beforeEach(async ({ page }) => {
-    await page.goto('/o3');
+  test.beforeEach(async ({ page, baseURL }) => {
+    await page.goto(baseURL!);
   });
 
   test('TC1: Initial form rendering and submit button state', async ({ page }) => {
@@ -58,6 +58,12 @@ test.describe('Book Entry Form and Data Grid', () => {
     await expect(page.locator(selectors.pagesInput)).toBeVisible();
     await expect(page.locator(selectors.submitButton)).toBeVisible();
     await expect(page.locator(selectors.submitButton)).toBeDisabled(); // Initially disabled as fields are empty
+  });
+
+  test('TC1b: Default publication date value', async ({ page }) => {
+    const dateInput = page.locator(selectors.publicationDateInput);
+    const today = new Date().toISOString().split('T')[0];
+    await expect(dateInput).toHaveValue(today);
   });
 
   test.describe('TC2: Input Field Validations', () => {

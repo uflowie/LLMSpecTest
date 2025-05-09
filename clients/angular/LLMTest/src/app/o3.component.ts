@@ -1,39 +1,60 @@
-// book-manager.component.ts
-import { Component, OnInit, inject } from '@angular/core';
+// o3.component.ts
+import { Component, inject, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import {
   FormBuilder,
   FormGroup,
   Validators,
-  AbstractControl,
   ReactiveFormsModule,
+  AbstractControl,
 } from '@angular/forms';
-import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { first } from 'rxjs/operators';
+import { HttpClient, HttpClientModule } from '@angular/common/http';
 
-/** Book model mirroring the API schema */
+/** --- Types ---------------------------------------------------------------- */
+
 interface Book {
   id: number;
   title: string;
   author: string;
   isbn: string;
-  publication_date: string; // ISO-8601 date string
+  publication_date: string; // YYYY-MM-DD
   number_of_pages: number;
 }
 
-/** Stand-alone component providing book form + data grid */
+type BookInput = Omit<Book, 'id'>;
+
+/** --- Validators ----------------------------------------------------------- */
+
+/** Exactly 13 numeric digits */
+function isbnValidator(ctrl: AbstractControl) {
+  const value = ctrl.value as string;
+  const valid = /^[0-9]{13}$/.test(value);
+  return valid ? null : { isbn: true };
+}
+
+/** Not a future date (assumes YYYY-MM-DD) */
+function notFutureDateValidator(ctrl: AbstractControl) {
+  const value = ctrl.value as string;
+  if (!value) return null;
+  const today = new Date().toISOString().substring(0, 10);
+  return value <= today ? null : { futureDate: true };
+}
+
+/** --- Component ------------------------------------------------------------ */
+
 @Component({
-  selector: 'app-book-manager',
+  selector: 'app-o3',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule],
+  imports: [CommonModule, ReactiveFormsModule, HttpClientModule],
   template: `
+    <!-- ─────────────────────────── Book Entry Form ────────────────────────── -->
     <form
       [formGroup]="bookForm"
       (ngSubmit)="onSubmit()"
       novalidate
       aria-labelledby="form-title"
     >
-      <h2 id="form-title" class="sr-only">Add a new book</h2>
+      <h2 id="form-title" class="sr-only">Add a Book</h2>
 
       <!-- Title -->
       <div>
@@ -41,16 +62,15 @@ interface Book {
         <input
           id="title"
           type="text"
-          placeholder="Enter book title"
           formControlName="title"
+          placeholder="Enter book title"
           data-testid="input-title"
-          required
-          minlength="2"
-          maxlength="100"
+          aria-required="true"
         />
         <div
-          *ngIf="hasError(title)"
+          *ngIf="showError('title')"
           data-testid="error-title"
+          class="error"
           aria-live="polite"
         >
           Title must be between 2 and 100 characters.
@@ -63,16 +83,15 @@ interface Book {
         <input
           id="author"
           type="text"
-          placeholder="Enter author name"
           formControlName="author"
+          placeholder="Enter author name"
           data-testid="input-author"
-          required
-          minlength="2"
-          maxlength="60"
+          aria-required="true"
         />
         <div
-          *ngIf="hasError(author)"
+          *ngIf="showError('author')"
           data-testid="error-author"
+          class="error"
           aria-live="polite"
         >
           Author name must be between 2 and 60 characters.
@@ -85,16 +104,16 @@ interface Book {
         <input
           id="isbn"
           type="text"
-          placeholder="Enter 13-digit ISBN number"
           formControlName="isbn"
+          maxlength="13"
+          placeholder="Enter 13-digit ISBN number"
           data-testid="input-isbn"
-          required
-          pattern="\\d{13}"
-          inputmode="numeric"
+          aria-required="true"
         />
         <div
-          *ngIf="hasError(isbn)"
+          *ngIf="showError('isbn')"
           data-testid="error-isbn"
+          class="error"
           aria-live="polite"
         >
           ISBN must contain exactly 13 numeric digits.
@@ -103,39 +122,41 @@ interface Book {
 
       <!-- Publication Date -->
       <div>
-        <label for="pubDate">Publication Date</label>
+        <label for="publication_date">Publication Date</label>
         <input
-          id="pubDate"
+          id="publication_date"
           type="date"
           formControlName="publication_date"
           data-testid="input-publication-date"
-          required
+          aria-required="true"
         />
         <div
-          *ngIf="hasError(publication_date)"
+          *ngIf="showError('publication_date')"
           data-testid="error-publication-date"
+          class="error"
           aria-live="polite"
         >
           Publication Date cannot be in the future.
         </div>
       </div>
 
-      <!-- Number of Pages -->
+      <!-- Pages -->
       <div>
-        <label for="pages">Number of Pages</label>
+        <label for="number_of_pages">Number of Pages</label>
         <input
-          id="pages"
+          id="number_of_pages"
           type="number"
-          placeholder="Enter number of pages"
           formControlName="number_of_pages"
-          data-testid="input-pages"
-          required
+          placeholder="Enter number of pages"
           min="1"
           max="5000"
+          data-testid="input-pages"
+          aria-required="true"
         />
         <div
-          *ngIf="hasError(number_of_pages)"
+          *ngIf="showError('number_of_pages')"
           data-testid="error-pages"
+          class="error"
           aria-live="polite"
         >
           Number of pages must be between 1 and 5000.
@@ -145,231 +166,166 @@ interface Book {
       <!-- Submit -->
       <button
         type="submit"
+        [disabled]="bookForm.invalid"
         data-testid="btn-submit-book"
-        [disabled]="bookForm.invalid || submitting"
       >
         Add Book
       </button>
     </form>
 
-    <!-- Data Grid -->
-    <table data-testid="data-grid-books">
+    <!-- ─────────────────────────── Data Grid ──────────────────────────────── -->
+    <table
+      *ngIf="books.length"
+      data-testid="data-grid-books"
+      aria-label="Submitted books"
+    >
       <thead>
         <tr>
-          <th scope="col">ID</th>
-          <th scope="col">Title</th>
-          <th scope="col">Author</th>
-          <th scope="col">ISBN</th>
-          <th scope="col">Publication Date</th>
-          <th scope="col">Pages</th>
+          <th>ID</th>
+          <th>Title</th>
+          <th>Author</th>
+          <th>ISBN</th>
+          <th>Publication&nbsp;Date</th>
+          <th>Pages</th>
         </tr>
       </thead>
       <tbody>
         <tr
-          *ngFor="let b of books"
-          [attr.data-testid]="'data-grid-row-' + b.id"
+          *ngFor="let book of books; trackBy: trackById"
+          [attr.data-testid]="'data-grid-row-' + book.id"
         >
-          <td [attr.data-testid]="'data-grid-cell-id-' + b.id">{{ b.id }}</td>
-          <td [attr.data-testid]="'data-grid-cell-title-' + b.id">
-            {{ b.title }}
+          <td [attr.data-testid]="'data-grid-cell-id-' + book.id">
+            {{ book.id }}
           </td>
-          <td [attr.data-testid]="'data-grid-cell-author-' + b.id">
-            {{ b.author }}
+          <td [attr.data-testid]="'data-grid-cell-title-' + book.id">
+            {{ book.title }}
           </td>
-          <td [attr.data-testid]="'data-grid-cell-isbn-' + b.id">
-            {{ b.isbn }}
+          <td [attr.data-testid]="'data-grid-cell-author-' + book.id">
+            {{ book.author }}
           </td>
-          <td [attr.data-testid]="'data-grid-cell-publication-date-' + b.id">
-            {{ b.publication_date | date : 'yyyy-MM-dd' }}
+          <td [attr.data-testid]="'data-grid-cell-isbn-' + book.id">
+            {{ book.isbn }}
           </td>
-          <td [attr.data-testid]="'data-grid-cell-pages-' + b.id">
-            {{ b.number_of_pages }}
+          <td [attr.data-testid]="'data-grid-cell-publication-date-' + book.id">
+            {{ book.publication_date }}
+          </td>
+          <td [attr.data-testid]="'data-grid-cell-pages-' + book.id">
+            {{ book.number_of_pages }}
           </td>
         </tr>
       </tbody>
     </table>
   `,
   styles: [
-    /* Simple, framework-free styling */
     `
       form {
-        display: flex;
-        flex-direction: column;
+        display: grid;
         gap: 1rem;
-        max-width: 25rem;
-        margin-bottom: 2rem;
+        max-width: 22rem;
+        margin-block-end: 2rem;
       }
-
-      input,
-      button {
-        font: inherit;
-        padding: 0.5rem;
+      .error {
+        font-size: 0.875rem;
+        color: #c33;
       }
-
       button[disabled] {
         opacity: 0.5;
         cursor: not-allowed;
       }
-
       table {
         width: 100%;
         border-collapse: collapse;
       }
-
       th,
       td {
         border: 1px solid #ccc;
         padding: 0.5rem;
-      }
-
-      th {
         text-align: left;
-        background: #f7f7f7;
       }
-
-      /* Screen-reader-only heading */
-      .sr-only {
-        position: absolute;
-        width: 1px;
-        height: 1px;
-        padding: 0;
-        margin: -1px;
-        overflow: hidden;
-        clip: rect(0, 0, 0, 0);
-        white-space: nowrap;
-        border: 0;
-      }
-
-      /* Error text */
-      div[aria-live='polite'] {
-        color: #c00;
-        font-size: 0.875rem;
+      th {
+        background: #f3f3f3;
       }
     `,
   ],
 })
 export class O3Component implements OnInit {
-  /** Reactive form instance */
-  readonly bookForm: FormGroup;
+  private fb = inject(FormBuilder);
+  private http = inject(HttpClient);
 
-  /** Book collection rendered in grid */
+  /** Reactive form with validation rules */
+  readonly bookForm: FormGroup = this.fb.group({
+    title: [
+      '',
+      [Validators.required, Validators.minLength(2), Validators.maxLength(100)],
+    ],
+    author: [
+      '',
+      [Validators.required, Validators.minLength(2), Validators.maxLength(60)],
+    ],
+    isbn: ['', [Validators.required, isbnValidator]],
+    publication_date: [
+      this.today,
+      [Validators.required, notFutureDateValidator],
+    ],
+    number_of_pages: [
+      '',
+      [
+        Validators.required,
+        Validators.min(1),
+        Validators.max(5000),
+        Validators.pattern('^[0-9]+$'),
+      ],
+    ],
+  });
+
+  /** In-memory list of books displayed in the grid */
   books: Book[] = [];
 
-  /** Disables UI while waiting for API */
-  submitting = false;
-
-  private readonly http = inject(HttpClient);
-  private readonly fb = inject(FormBuilder);
-
-  constructor() {
-    this.bookForm = this.fb.group({
-      title: [
-        '',
-        [Validators.required, Validators.minLength(2), Validators.maxLength(100)],
-      ],
-      author: [
-        '',
-        [Validators.required, Validators.minLength(2), Validators.maxLength(60)],
-      ],
-      isbn: ['', [Validators.required, Validators.pattern(/^\d{13}$/)]],
-      publication_date: [
-        '',
-        [Validators.required, this.noFutureDateValidator],
-      ],
-      number_of_pages: [
-        '',
-        [
-          Validators.required,
-          Validators.min(1),
-          Validators.max(5000),
-          Validators.pattern(/^\d+$/),
-        ],
-      ],
-    });
+  /** GET today in YYYY-MM-DD */
+  get today(): string {
+    return new Date().toISOString().substring(0, 10);
   }
-
-  // #region form getters for template
-  get title(): AbstractControl {
-    return this.bookForm.get('title')!;
-  }
-  get author(): AbstractControl {
-    return this.bookForm.get('author')!;
-  }
-  get isbn(): AbstractControl {
-    return this.bookForm.get('isbn')!;
-  }
-  get publication_date(): AbstractControl {
-    return this.bookForm.get('publication_date')!;
-  }
-  get number_of_pages(): AbstractControl {
-    return this.bookForm.get('number_of_pages')!;
-  }
-  // #endregion
 
   ngOnInit(): void {
-    this.loadBooks();
+    this.fetchBooks();
   }
 
-  /** Client-side validator blocking future dates */
-  private noFutureDateValidator(control: AbstractControl) {
-    const value = control.value;
-    if (!value) {
-      return null;
-    }
-    const selected = new Date(value);
-    selected.setHours(0, 0, 0, 0);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    return selected > today ? { future: true } : null;
+  /** Helper: should an error message be shown? */
+  showError(controlName: keyof BookInput): boolean {
+    const ctrl = this.bookForm.get(controlName);
+    return !!ctrl && ctrl.invalid && (ctrl.dirty || ctrl.touched);
   }
 
-  /** True if control currently shows a validation error */
-  hasError(ctrl: AbstractControl) {
-    return ctrl.invalid && (ctrl.dirty || ctrl.touched);
-  }
-
-  /** Load existing books from API */
-  private loadBooks(): void {
-    this.http
-      .get<Book[]>('http://localhost:5000/books')
-      .pipe(first())
-      .subscribe({
-        next: (data) => (this.books = data ?? []),
-        error: () => console.error('Failed to fetch books'),
-      });
-  }
-
-  /** Submit handler for creating a book entry */
+  /** Submit new book to API */
   onSubmit(): void {
     if (this.bookForm.invalid) return;
 
-    this.submitting = true;
-    const payload = this.bookForm.value as Omit<Book, 'id'>;
+    const payload: BookInput = this.bookForm.value;
+    this.http.post<Book>('http://localhost:5000/books', payload).subscribe({
+      next: (created) => {
+        // Add new book to top of list
+        this.books.unshift(created);
+        // Reset form
+        this.bookForm.reset({
+          publication_date: this.today,
+        });
+        this.bookForm.markAsPristine();
+      },
+      error: (err) => {
+        // Real app: show toast or similar; here just console
+        console.error('Failed to add book:', err);
+      },
+    });
+  }
 
+  /** Retrieve existing books */
+  private fetchBooks(): void {
     this.http
-      .post<Book>('http://localhost:5000/books', payload)
-      .pipe(first())
-      .subscribe({
-        next: (created) => {
-          this.books.unshift(created);
-          this.bookForm.reset();
-          this.bookForm.markAsPristine();
-          this.bookForm.markAsUntouched();
-          this.submitting = false;
-        },
-        error: (err: HttpErrorResponse) => {
-          if (err.status === 400 && err.error?.errors) {
-            // Map field errors to form controls if API returns any
-            Object.entries<Record<string, string[]>>(err.error.errors).forEach(
-              ([key, msgs]) =>
-                this.bookForm.get(key)?.setErrors({
-                  api: Array.isArray(msgs) ? msgs.join(' ') : String(msgs),
-                })
-            );
-          }
-          console.error('Create book failed', err);
-          this.submitting = false;
-        },
-      });
+      .get<Book[]>('http://localhost:5000/books')
+      .subscribe((list) => (this.books = list ?? []));
+  }
+
+  trackById(_: number, book: Book) {
+    return book.id;
   }
 }

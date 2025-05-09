@@ -1,276 +1,376 @@
-@page "/books-gemini"
+@page "/gemini"
 @inject HttpClient Http
 @using System.ComponentModel.DataAnnotations
 @using System.Text.Json
 @using System.Text.Json.Serialization
-@using System.Globalization
+@using System.Net.Http.Json
+@using System.Text.RegularExpressions
+@implements IDisposable
 
 <style>
-    .form-field {
+    .validation-message {
+        color: red;
+        font-size: 0.9em;
+    }
+    .form-group {
         margin-bottom: 1rem;
     }
-
-    .form-field label {
+    label {
         display: block;
         margin-bottom: 0.25rem;
-        font-weight: bold;
     }
-
-    .form-field input,
-    .form-field select {
+    input[type="text"], input[type="number"], input[type="date"] {
         width: 100%;
         padding: 0.5rem;
-        border: 1px solid #ccc;
-        border-radius: 4px;
+        margin-bottom: 0.25rem;
         box-sizing: border-box;
     }
-
-    .form-field .validation-message { /* Default Blazor class for validation messages */
-        color: red;
-        font-size: 0.875em;
+    .form-container, .grid-container {
+        margin-bottom: 2rem;
+        padding: 1rem;
+        border: 1px solid #ccc;
     }
-    
-    /* Ensure data-testid wrappers for validation messages don't add extra space if empty */
-    .form-field div[data-testid^="error-"] {
-        min-height: 1.2em; /* Reserve space for potential error message */
-    }
-
     table {
         width: 100%;
         border-collapse: collapse;
-        margin-top: 1rem;
     }
-
     th, td {
         border: 1px solid #ddd;
         padding: 8px;
         text-align: left;
     }
-
     th {
         background-color: #f2f2f2;
     }
-
-    button[type="submit"] {
-        padding: 0.75rem 1.5rem;
-        background-color: #007bff;
-        color: white;
-        border: none;
-        border-radius: 4px;
-        cursor: pointer;
-    }
-
-    button[type="submit"]:disabled {
-        background-color: #cccccc;
-        cursor: not-allowed;
-    }
-
-    .api-error-message {
-        color: red;
-        margin-top: 1rem;
-        padding: 0.5rem;
-        border: 1px solid red;
-        background-color: #ffebeb;
-    }
 </style>
 
-<h1>Book Management</h1>
+<h3>Book Management</h3>
 
-<h2>Add New Book</h2>
-<EditForm Model="@bookInput" OnValidSubmit="@HandleValidSubmitAsync">
-    <DataAnnotationsValidator />
+@if (!string.IsNullOrEmpty(generalApiError))
+{
+    <div style="color: red; margin-bottom: 1rem;" data-testid="error-general-api">@generalApiError</div>
+}
 
-    <div class="form-field">
-        <label for="input-title-field">Book Title</label>
-        <InputText id="input-title-field" @bind-Value="bookInput.Title" data-testid="input-title" placeholder="Enter book title" />
-        <div data-testid="error-title"><ValidationMessage For="@(() => bookInput.Title)" /></div>
-    </div>
+<div class="form-container">
+    <h4>Add New Book</h4>
+    <EditForm EditContext="editContext" OnValidSubmit="HandleValidSubmitAsync">
+        <DataAnnotationsValidator />
 
-    <div class="form-field">
-        <label for="input-author-field">Author Name</label>
-        <InputText id="input-author-field" @bind-Value="bookInput.Author" data-testid="input-author" placeholder="Enter author name" />
-        <div data-testid="error-author"><ValidationMessage For="@(() => bookInput.Author)" /></div>
-    </div>
+        <div class="form-group">
+            <label for="input-title-id">Book Title</label>
+            <InputText id="input-title-id" @bind-Value="newBook.Title"
+                       @bind-Value:event="oninput"
+                       @onblur="() => ValidateFieldExplicitlyAsync(nameof(newBook.Title))"
+                       data-testid="input-title" placeholder="Enter book title" />
+            <div data-testid="error-title" class="validation-message"><ValidationMessage For="() => newBook.Title" /></div>
+        </div>
 
-    <div class="form-field">
-        <label for="input-isbn-field">ISBN Number</label>
-        <InputText id="input-isbn-field" @bind-Value="bookInput.Isbn" data-testid="input-isbn" placeholder="Enter 13-digit ISBN number" />
-        <div data-testid="error-isbn"><ValidationMessage For="@(() => bookInput.Isbn)" /></div>
-    </div>
+        <div class="form-group">
+            <label for="input-author-id">Author Name</label>
+            <InputText id="input-author-id" @bind-Value="newBook.Author"
+                       @bind-Value:event="oninput"
+                       @onblur="() => ValidateFieldExplicitlyAsync(nameof(newBook.Author))"
+                       data-testid="input-author" placeholder="Enter author name" />
+            <div data-testid="error-author" class="validation-message"><ValidationMessage For="() => newBook.Author" /></div>
+        </div>
 
-    <div class="form-field">
-        <label for="input-publication-date-field">Publication Date</label>
-        <InputDate id="input-publication-date-field" @bind-Value="bookInput.PublicationDate" data-testid="input-publication-date" />
-        <div data-testid="error-publication-date"><ValidationMessage For="@(() => bookInput.PublicationDate)" /></div>
-    </div>
+        <div class="form-group">
+            <label for="input-isbn-id">ISBN Number</label>
+            <InputText id="input-isbn-id" @bind-Value="newBook.Isbn"
+                       @bind-Value:event="oninput"
+                       @onblur="() => ValidateFieldExplicitlyAsync(nameof(newBook.Isbn))"
+                       data-testid="input-isbn" placeholder="Enter 13-digit ISBN number" />
+            <div data-testid="error-isbn" class="validation-message"><ValidationMessage For="() => newBook.Isbn" /></div>
+        </div>
 
-    <div class="form-field">
-        <label for="input-pages-field">Number of Pages</label>
-        <InputNumber id="input-pages-field" @bind-Value="bookInput.NumberOfPages" data-testid="input-pages" AdditionalAttributes="@(new Dictionary<string, object> { { "placeholder", "Enter number of pages" } })" />
-        <div data-testid="error-pages"><ValidationMessage For="@(() => bookInput.NumberOfPages)" /></div>
-    </div>
+        <div class="form-group">
+            <label for="input-publication-date-id">Publication Date</label>
+            <InputDate id="input-publication-date-id" @bind-Value="newBook.PublicationDate"
+                       @onblur="() => ValidateFieldExplicitlyAsync(nameof(newBook.PublicationDate))"
+                       data-testid="input-publication-date" />
+            <div data-testid="error-publication-date" class="validation-message"><ValidationMessage For="() => newBook.PublicationDate" /></div>
+        </div>
 
-    <button type="submit" data-testid="btn-submit-book">Add Book</button>
-    
-    @if (!string.IsNullOrEmpty(apiErrorMessage))
+        <div class="form-group">
+            <label for="input-pages-id">Number of Pages</label>
+            <InputNumber id="input-pages-id" @bind-Value="newBook.NumberOfPages"
+                         @onblur="() => ValidateFieldExplicitlyAsync(nameof(newBook.NumberOfPages))"
+                         data-testid="input-pages" placeholder="Enter number of pages" />
+            <div data-testid="error-pages" class="validation-message"><ValidationMessage For="() => newBook.NumberOfPages" /></div>
+        </div>
+
+        <button type="submit" data-testid="btn-submit-book" disabled="@isSubmitDisabled">Add Book</button>
+    </EditForm>
+</div>
+
+<div class="grid-container">
+    <h4>Book List</h4>
+    @if (books == null)
     {
-        <div class="api-error-message" data-testid="error-api">@apiErrorMessage</div>
+        <p>Loading books...</p>
     }
-</EditForm>
-
-<h2>Book List</h2>
-@if (books == null && string.IsNullOrEmpty(initialLoadErrorMessage))
-{
-    <p><em>Loading books...</em></p>
-}
-else if (!string.IsNullOrEmpty(initialLoadErrorMessage))
-{
-     <p style="color: red;"><em>@initialLoadErrorMessage</em></p>
-}
-else if (books != null && !books.Any())
-{
-    <p><em>No books found. Add a book using the form above.</em></p>
-}
-else if (books != null)
-{
-    <table data-testid="data-grid-books">
-        <thead>
-            <tr>
-                <th>ID</th>
-                <th>Title</th>
-                <th>Author</th>
-                <th>ISBN</th>
-                <th>Publication Date</th>
-                <th>Pages</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var book in books)
-            {
-                <tr data-testid="@($"data-grid-row-{book.Id}")">
-                    <td data-testid="@($"data-grid-cell-id-{book.Id}")">@book.Id</td>
-                    <td data-testid="@($"data-grid-cell-title-{book.Id}")">@book.Title</td>
-                    <td data-testid="@($"data-grid-cell-author-{book.Id}")">@book.Author</td>
-                    <td data-testid="@($"data-grid-cell-isbn-{book.Id}")">@book.Isbn</td>
-                    <td data-testid="@($"data-grid-cell-publication-date-{book.Id}")">@book.PublicationDate.ToString("yyyy-MM-dd")</td>
-                    <td data-testid="@($"data-grid-cell-pages-{book.Id}")">@book.NumberOfPages</td>
+    else if (!books.Any())
+    {
+        <p data-testid="data-grid-empty">No books found.</p>
+    }
+    else
+    {
+        <table data-testid="data-grid-books">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Title</th>
+                    <th>Author</th>
+                    <th>ISBN</th>
+                    <th>Publication Date</th>
+                    <th>Pages</th>
                 </tr>
-            }
-        </tbody>
-    </table>
-}
+            </thead>
+            <tbody>
+                @foreach (var book in books)
+                {
+                    <tr data-testid="data-grid-row-@book.Id">
+                        <td data-testid="data-grid-cell-id-@book.Id">@book.Id</td>
+                        <td data-testid="data-grid-cell-title-@book.Id">@book.Title</td>
+                        <td data-testid="data-grid-cell-author-@book.Id">@book.Author</td>
+                        <td data-testid="data-grid-cell-isbn-@book.Id">@book.Isbn</td>
+                        <td data-testid="data-grid-cell-publication-date-@book.Id">@book.PublicationDate.ToString("yyyy-MM-dd")</td>
+                        <td data-testid="data-grid-cell-pages-@book.Id">@book.NumberOfPages</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
 
 @code {
-    private BookInputModel bookInput = new BookInputModel();
-    private List<BookModel>? books;
-    private string? apiErrorMessage; // For form submission API errors
-    private string? initialLoadErrorMessage; // For initial book loading errors
+    private BookInputModel newBook = new();
+    private List<BookViewModel> books;
+    private EditContext editContext;
+    private bool isSubmitDisabled = true;
+    private string generalApiError = string.Empty;
+    private ValidationMessageStore validationMessageStore;
 
     private const string ApiBaseUrl = "http://localhost:5000"; // As per OpenAPI spec
 
     protected override async Task OnInitializedAsync()
     {
+        editContext = new EditContext(newBook);
+        validationMessageStore = new ValidationMessageStore(editContext);
+        editContext.OnFieldChanged += HandleFieldChanged;
+        editContext.OnValidationStateChanged += HandleValidationStateChanged;
+        await UpdateSubmitButtonStateAsync(); 
         await LoadBooksAsync();
+    }
+
+    private async Task ValidateFieldExplicitlyAsync(string fieldName)
+    {
+        if (editContext == null) return;
+        var fieldIdentifier = editContext.Field(fieldName);
+        editContext.NotifyFieldChanged(fieldIdentifier);
+        await UpdateSubmitButtonStateAsync();
+    }
+    
+    private void HandleFieldChanged(object sender, FieldChangedEventArgs e)
+    {
+        _ = UpdateSubmitButtonStateAsync();
+    }
+
+    private void HandleValidationStateChanged(object sender, ValidationStateChangedEventArgs e)
+    {
+        _ = UpdateSubmitButtonStateAsync();
+    }
+
+    private async Task UpdateSubmitButtonStateAsync()
+    {
+        if (editContext == null) return;
+        var isValid = editContext.Validate(); 
+        isSubmitDisabled = !isValid;
+        await InvokeAsync(StateHasChanged);
     }
 
     private async Task LoadBooksAsync()
     {
-        initialLoadErrorMessage = null;
+        generalApiError = string.Empty;
         try
         {
-            var loadedBooks = await Http.GetFromJsonAsync<List<BookModel>>($"{ApiBaseUrl}/books");
-            books = loadedBooks ?? new List<BookModel>();
+            books = await Http.GetFromJsonAsync<List<BookViewModel>>($"{ApiBaseUrl}/books");
         }
         catch (Exception ex)
         {
-            books = new List<BookModel>(); 
-            initialLoadErrorMessage = $"Error loading books: {ex.Message}. Please ensure the API is running at {ApiBaseUrl}.";
-            Console.WriteLine($"Error loading books: {ex}");
+            generalApiError = $"Error loading books: {ex.Message}";
+            books = new List<BookViewModel>();
         }
+        await InvokeAsync(StateHasChanged);
     }
 
     private async Task HandleValidSubmitAsync()
     {
-        apiErrorMessage = null;
-
-        var bookToCreate = new ApiBookInputDto
+        generalApiError = string.Empty;
+        if (validationMessageStore != null) // Ensure validationMessageStore is available
         {
-            Title = bookInput.Title,
-            Author = bookInput.Author,
-            Isbn = bookInput.Isbn,
-            PublicationDate = bookInput.PublicationDate!.Value.ToString("yyyy-MM-dd"),
-            NumberOfPages = bookInput.NumberOfPages!.Value 
-        };
+             validationMessageStore.Clear();
+        }
 
         try
         {
-            var response = await Http.PostAsJsonAsync($"{ApiBaseUrl}/books", bookToCreate);
+            var response = await Http.PostAsJsonAsync($"{ApiBaseUrl}/books", newBook);
 
-            if (response.IsSuccessStatusCode) // 201 Created
+            if (response.IsSuccessStatusCode)
             {
-                var createdBook = await response.Content.ReadFromJsonAsync<BookModel>();
-                if (createdBook != null)
+                ResetForm(); // This will also re-initialize editContext and validationMessageStore
+                await LoadBooksAsync();
+            }
+            else if (response.StatusCode == System.Net.HttpStatusCode.BadRequest)
+            {
+                var errorContentString = await response.Content.ReadAsStringAsync();
+                try
                 {
-                    books ??= new List<BookModel>();
-                    books.Insert(0, createdBook); 
-                    bookInput = new BookInputModel(); 
-                    StateHasChanged(); // Ensure UI updates, especially form reset and grid
+                    var validationErrorResponse = JsonSerializer.Deserialize<ApiValidationErrorResponse>(errorContentString, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                    if (validationErrorResponse?.Errors != null && validationErrorResponse.Errors.Any())
+                    {
+                        DisplayServerValidationErrors(validationErrorResponse);
+                    }
+                    else
+                    {
+                        var errorResponse = JsonSerializer.Deserialize<ApiErrorResponse>(errorContentString, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                        generalApiError = errorResponse?.Error ?? $"An unexpected error occurred (400): {errorContentString}";
+                    }
                 }
-                else
+                catch (JsonException)
                 {
-                     apiErrorMessage = "Book created, but failed to retrieve details from response.";
+                     generalApiError = $"Error parsing API error response: {errorContentString}";
                 }
             }
-            else 
+            else
             {
-                var errorContent = await response.Content.ReadAsStringAsync();
-                string specificError = "";
-                // Try to parse API specific error structures
-                try {
-                    var validationError = JsonSerializer.Deserialize<ApiValidationErrorResponse>(errorContent, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-                    if (validationError?.Errors != null && validationError.Errors.Any())
-                    {
-                        var errorMessages = validationError.Errors.SelectMany(kvp => kvp.Value.Select(v => $"{kvp.Key}: {v}"));
-                        specificError = $"API Validation Issues: {string.Join("; ", errorMessages)}";
-                    }
-                } catch (JsonException) { /* Not a ValidationErrorResponse */ }
-
-                if (string.IsNullOrEmpty(specificError)) {
-                    try {
-                        var genericError = JsonSerializer.Deserialize<ApiErrorResponse>(errorContent, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-                        if (!string.IsNullOrEmpty(genericError?.Error))
-                        {
-                            specificError = $"API Error: {genericError.Error}";
-                        }
-                    } catch (JsonException) { /* Not an ErrorResponse */ }
-                }
-                
-                apiErrorMessage = string.IsNullOrEmpty(specificError) 
-                    ? $"Error creating book. Status: {response.StatusCode}. Response: {errorContent}"
-                    : specificError;
+                generalApiError = $"Error adding book: {response.ReasonPhrase} ({(int)response.StatusCode})";
             }
         }
         catch (Exception ex)
         {
-            apiErrorMessage = $"An exception occurred while creating the book: {ex.Message}";
-            Console.WriteLine($"Exception creating book: {ex}");
+            generalApiError = $"Error submitting form: {ex.Message}";
+        }
+        await UpdateSubmitButtonStateAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+    
+    private void DisplayServerValidationErrors(ApiValidationErrorResponse errorResponse)
+    {
+        if (validationMessageStore == null || editContext == null) return;
+
+        foreach (var errorField in errorResponse.Errors)
+        {
+            var modelFieldName = MapApiFieldToModelField(errorField.Key);
+            if (!string.IsNullOrEmpty(modelFieldName))
+            {
+                var fieldIdentifier = editContext.Field(modelFieldName);
+                foreach (var message in errorField.Value)
+                {
+                    validationMessageStore.Add(fieldIdentifier, message);
+                }
+            }
+            else 
+            {
+                 generalApiError += $" Server validation for '{errorField.Key}': {string.Join(" ", errorField.Value)}";
+            }
+        }
+        editContext.NotifyValidationStateChanged();
+    }
+
+    private string MapApiFieldToModelField(string apiField)
+    {
+        return apiField.ToLowerInvariant() switch
+        {
+            "title" => nameof(BookInputModel.Title),
+            "author" => nameof(BookInputModel.Author),
+            "isbn" => nameof(BookInputModel.Isbn),
+            "publication_date" => nameof(BookInputModel.PublicationDate),
+            "number_of_pages" => nameof(BookInputModel.NumberOfPages),
+            _ => string.Empty 
+        };
+    }
+
+    private void ResetForm()
+    {
+        // Unsubscribe from the old EditContext events
+        if (editContext != null)
+        {
+            editContext.OnFieldChanged -= HandleFieldChanged;
+            editContext.OnValidationStateChanged -= HandleValidationStateChanged;
+        }
+
+        newBook = new BookInputModel(); // Create a new model instance
+
+        // Create a new EditContext for the new 'newBook' instance
+        editContext = new EditContext(newBook);
+        
+        // Create a new ValidationMessageStore associated with the new EditContext
+        validationMessageStore = new ValidationMessageStore(editContext); 
+
+        // Subscribe to events on the new EditContext
+        editContext.OnFieldChanged += HandleFieldChanged;
+        editContext.OnValidationStateChanged += HandleValidationStateChanged;
+        
+        generalApiError = string.Empty; // Clear general errors
+
+        // Trigger validation and UI update for the new, empty form state
+        // UpdateSubmitButtonStateAsync will call editContext.Validate() on the new context and StateHasChanged
+        _ = UpdateSubmitButtonStateAsync(); 
+    }
+
+    public void Dispose()
+    {
+        if (editContext != null)
+        {
+            editContext.OnFieldChanged -= HandleFieldChanged;
+            editContext.OnValidationStateChanged -= HandleValidationStateChanged;
         }
     }
 
-    // --- Model Definitions ---
-    public class BookModel
+    // --- Model Classes ---
+
+    public class BookInputModel
+    {
+        [JsonPropertyName("title")]
+        [Required(ErrorMessage = "Title must be between 2 and 100 characters.")]
+        [StringLength(100, MinimumLength = 2, ErrorMessage = "Title must be between 2 and 100 characters.")]
+        public string Title { get; set; }
+
+        [JsonPropertyName("author")]
+        [Required(ErrorMessage = "Author name must be between 2 and 60 characters.")]
+        [StringLength(60, MinimumLength = 2, ErrorMessage = "Author name must be between 2 and 60 characters.")]
+        public string Author { get; set; }
+
+        [JsonPropertyName("isbn")]
+        [Required(ErrorMessage = "ISBN must contain exactly 13 numeric digits.")]
+        [RegularExpression("^[0-9]{13}$", ErrorMessage = "ISBN must contain exactly 13 numeric digits.")]
+        public string Isbn { get; set; }
+
+        [JsonPropertyName("publication_date")]
+        [Required(ErrorMessage = "Publication Date is required.")]
+        [NotFutureDate(ErrorMessage = "Publication Date cannot be in the future.")]
+        public DateTime? PublicationDate { get; set; } = DateTime.Today;
+
+        [JsonPropertyName("number_of_pages")]
+        [Required(ErrorMessage = "Number of pages must be between 1 and 5000.")]
+        [Range(1, 5000, ErrorMessage = "Number of pages must be between 1 and 5000.")]
+        public int? NumberOfPages { get; set; }
+    }
+
+    public class BookViewModel
     {
         [JsonPropertyName("id")]
         public int Id { get; set; }
 
         [JsonPropertyName("title")]
-        public string Title { get; set; } = "";
+        public string Title { get; set; }
 
         [JsonPropertyName("author")]
-        public string Author { get; set; } = "";
+        public string Author { get; set; }
 
         [JsonPropertyName("isbn")]
-        public string Isbn { get; set; } = "";
+        public string Isbn { get; set; }
 
         [JsonPropertyName("publication_date")]
         public DateTime PublicationDate { get; set; }
@@ -279,78 +379,32 @@ else if (books != null)
         public int NumberOfPages { get; set; }
     }
 
-    public class BookInputModel
+    public class ApiValidationErrorResponse
     {
-        [Required(ErrorMessage = "Title is required.")]
-        [StringLength(100, MinimumLength = 2, ErrorMessage = "Title must be between 2 and 100 characters.")]
-        public string? Title { get; set; }
-
-        [Required(ErrorMessage = "Author name is required.")]
-        [StringLength(60, MinimumLength = 2, ErrorMessage = "Author name must be between 2 and 60 characters.")]
-        public string? Author { get; set; }
-
-        [Required(ErrorMessage = "ISBN is required.")]
-        [RegularExpression("^[0-9]{13}$", ErrorMessage = "ISBN must contain exactly 13 numeric digits.")]
-        public string? Isbn { get; set; }
-
-        [Required(ErrorMessage = "Publication date is required.")]
-        [NotFutureDate(ErrorMessage = "Publication Date cannot be in the future.")]
-        public DateTime? PublicationDate { get; set; } = DateTime.Today;
-
-        [Required(ErrorMessage = "Number of pages is required.")]
-        [Range(1, 5000, ErrorMessage = "Number of pages must be between 1 and 5000.")]
-        public int? NumberOfPages { get; set; }
+        [JsonPropertyName("errors")]
+        public Dictionary<string, List<string>> Errors { get; set; }
     }
 
-    public class ApiBookInputDto
+    public class ApiErrorResponse
     {
-        [JsonPropertyName("title")]
-        public string? Title { get; set; }
-
-        [JsonPropertyName("author")]
-        public string? Author { get; set; }
-
-        [JsonPropertyName("isbn")]
-        public string? Isbn { get; set; }
-
-        [JsonPropertyName("publication_date")]
-        public string? PublicationDate { get; set; }
-
-        [JsonPropertyName("number_of_pages")]
-        public int NumberOfPages { get; set; } // API schema: integer (non-nullable)
+        [JsonPropertyName("error")]
+        public string Error { get; set; }
     }
 
     public class NotFutureDateAttribute : ValidationAttribute
     {
         public NotFutureDateAttribute() { }
 
-        protected override ValidationResult? IsValid(object? value, ValidationContext validationContext)
+        protected override ValidationResult IsValid(object value, ValidationContext validationContext)
         {
-            // Error message is taken from the ErrorMessage property set on the attribute usage,
-            // or this default if not specified there.
-            // The spec says: "Publication Date cannot be in the future."
-            var defaultErrorMessage = "Publication Date cannot be in the future.";
-
-            if (value is DateTime date)
+            if (value is DateTime dt)
             {
-                if (date.Date > DateTime.Now.Date)
+                if (dt.Date > DateTime.Today.Date)
                 {
-                    return new ValidationResult(ErrorMessage ?? defaultErrorMessage);
+                    return new ValidationResult(ErrorMessage ?? "Publication Date cannot be in the future.");
                 }
             }
             return ValidationResult.Success;
         }
-    }
-
-    public class ApiValidationErrorResponse
-    {
-        [JsonPropertyName("errors")]
-        public Dictionary<string, List<string>>? Errors { get; set; }
-    }
-
-    public class ApiErrorResponse
-    {
-        [JsonPropertyName("error")]
-        public string? Error { get; set; }
     }
 }

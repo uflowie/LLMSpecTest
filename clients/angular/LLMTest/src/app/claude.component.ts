@@ -19,7 +19,7 @@ interface ValidationErrorResponse {
 }
 
 @Component({
-  selector: 'app-book-management',
+  selector: 'app-claude',
   standalone: true,
   imports: [CommonModule, ReactiveFormsModule, HttpClientModule],
   template: `
@@ -28,7 +28,7 @@ interface ValidationErrorResponse {
 
       <!-- Book Entry Form -->
       <form [formGroup]="bookForm" (ngSubmit)="onSubmit()" class="book-form">
-        <h2>Add New Book</h2>
+        <h2>Add a New Book</h2>
 
         <!-- Title Field -->
         <div class="form-group">
@@ -39,17 +39,13 @@ interface ValidationErrorResponse {
             formControlName="title"
             data-testid="input-title"
             placeholder="Enter book title"
-            (blur)="onBlur('title')"
-            aria-describedby="title-error"
-          >
+            (blur)="validateField('title')"
+            (input)="validateField('title')">
           <div
-            *ngIf="showError('title')"
+            *ngIf="formErrors.title"
             class="error-message"
-            data-testid="error-title"
-            id="title-error"
-            role="alert"
-          >
-            Title must be between 2 and 100 characters.
+            data-testid="error-title">
+            {{ formErrors.title }}
           </div>
         </div>
 
@@ -62,17 +58,13 @@ interface ValidationErrorResponse {
             formControlName="author"
             data-testid="input-author"
             placeholder="Enter author name"
-            (blur)="onBlur('author')"
-            aria-describedby="author-error"
-          >
+            (blur)="validateField('author')"
+            (input)="validateField('author')">
           <div
-            *ngIf="showError('author')"
+            *ngIf="formErrors.author"
             class="error-message"
-            data-testid="error-author"
-            id="author-error"
-            role="alert"
-          >
-            Author name must be between 2 and 60 characters.
+            data-testid="error-author">
+            {{ formErrors.author }}
           </div>
         </div>
 
@@ -85,17 +77,13 @@ interface ValidationErrorResponse {
             formControlName="isbn"
             data-testid="input-isbn"
             placeholder="Enter 13-digit ISBN number"
-            (blur)="onBlur('isbn')"
-            aria-describedby="isbn-error"
-          >
+            (blur)="validateField('isbn')"
+            (input)="validateField('isbn')">
           <div
-            *ngIf="showError('isbn')"
+            *ngIf="formErrors.isbn"
             class="error-message"
-            data-testid="error-isbn"
-            id="isbn-error"
-            role="alert"
-          >
-            ISBN must contain exactly 13 numeric digits.
+            data-testid="error-isbn">
+            {{ formErrors.isbn }}
           </div>
         </div>
 
@@ -107,17 +95,13 @@ interface ValidationErrorResponse {
             id="publication_date"
             formControlName="publication_date"
             data-testid="input-publication-date"
-            (blur)="onBlur('publication_date')"
-            aria-describedby="publication-date-error"
-          >
+            (blur)="validateField('publication_date')"
+            (change)="validateField('publication_date')">
           <div
-            *ngIf="showError('publication_date')"
+            *ngIf="formErrors.publication_date"
             class="error-message"
-            data-testid="error-publication-date"
-            id="publication-date-error"
-            role="alert"
-          >
-            Publication Date cannot be in the future.
+            data-testid="error-publication-date">
+            {{ formErrors.publication_date }}
           </div>
         </div>
 
@@ -130,58 +114,47 @@ interface ValidationErrorResponse {
             formControlName="number_of_pages"
             data-testid="input-pages"
             placeholder="Enter number of pages"
-            (blur)="onBlur('number_of_pages')"
-            aria-describedby="pages-error"
-          >
+            (blur)="validateField('number_of_pages')"
+            (input)="validateField('number_of_pages')">
           <div
-            *ngIf="showError('number_of_pages')"
+            *ngIf="formErrors.number_of_pages"
             class="error-message"
-            data-testid="error-pages"
-            id="pages-error"
-            role="alert"
-          >
-            Number of pages must be between 1 and 5000.
+            data-testid="error-pages">
+            {{ formErrors.number_of_pages }}
           </div>
         </div>
 
+        <!-- Submit Button -->
         <button
           type="submit"
           data-testid="btn-submit-book"
-          [disabled]="!bookForm.valid"
-          aria-label="Add new book"
-        >
+          [disabled]="!bookForm.valid">
           Add Book
         </button>
       </form>
 
-      <!-- Data Grid -->
+      <!-- Book Data Grid -->
       <div class="book-grid">
         <h2>Book List</h2>
-        <table data-testid="data-grid-books" aria-label="List of books">
+        <table data-testid="data-grid-books">
           <thead>
             <tr>
-              <th scope="col">ID</th>
-              <th scope="col">Title</th>
-              <th scope="col">Author</th>
-              <th scope="col">ISBN</th>
-              <th scope="col">Publication Date</th>
-              <th scope="col">Number of Pages</th>
+              <th>ID</th>
+              <th>Title</th>
+              <th>Author</th>
+              <th>ISBN</th>
+              <th>Publication Date</th>
+              <th>Pages</th>
             </tr>
           </thead>
           <tbody>
-            <tr
-              *ngFor="let book of books"
-              [attr.data-testid]="'data-grid-row-' + book.id"
-            >
+            <tr *ngFor="let book of books" [attr.data-testid]="'data-grid-row-' + book.id">
               <td [attr.data-testid]="'data-grid-cell-id-' + book.id">{{ book.id }}</td>
               <td [attr.data-testid]="'data-grid-cell-title-' + book.id">{{ book.title }}</td>
               <td [attr.data-testid]="'data-grid-cell-author-' + book.id">{{ book.author }}</td>
               <td [attr.data-testid]="'data-grid-cell-isbn-' + book.id">{{ book.isbn }}</td>
-              <td [attr.data-testid]="'data-grid-cell-publication-date-' + book.id">{{ formatDate(book.publication_date) }}</td>
+              <td [attr.data-testid]="'data-grid-cell-publication-date-' + book.id">{{ book.publication_date }}</td>
               <td [attr.data-testid]="'data-grid-cell-pages-' + book.id">{{ book.number_of_pages }}</td>
-            </tr>
-            <tr *ngIf="books.length === 0">
-              <td colspan="6" class="no-data">No books available</td>
             </tr>
           </tbody>
         </table>
@@ -225,30 +198,23 @@ interface ValidationErrorResponse {
       box-sizing: border-box;
     }
 
-    input:focus {
-      border-color: #007bff;
-      outline: none;
-      box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
-    }
-
     .error-message {
-      color: #dc3545;
-      font-size: 14px;
+      color: #d9534f;
+      font-size: 0.9em;
       margin-top: 5px;
     }
 
     button {
-      background-color: #007bff;
+      background-color: #5cb85c;
       color: white;
       border: none;
       padding: 10px 15px;
       border-radius: 4px;
       cursor: pointer;
-      font-size: 16px;
     }
 
-    button:hover:not(:disabled) {
-      background-color: #0069d9;
+    button:hover {
+      background-color: #4cae4c;
     }
 
     button:disabled {
@@ -256,15 +222,18 @@ interface ValidationErrorResponse {
       cursor: not-allowed;
     }
 
+    .book-grid {
+      overflow-x: auto;
+    }
+
     table {
       width: 100%;
       border-collapse: collapse;
-      margin-top: 20px;
     }
 
     th, td {
       border: 1px solid #ddd;
-      padding: 8px;
+      padding: 10px;
       text-align: left;
     }
 
@@ -276,32 +245,29 @@ interface ValidationErrorResponse {
     tr:nth-child(even) {
       background-color: #f9f9f9;
     }
-
-    .no-data {
-      text-align: center;
-      padding: 20px;
-      font-style: italic;
-      color: #666;
-    }
   `]
 })
 export class ClaudeComponent implements OnInit {
-  bookForm!: FormGroup;
+  bookForm: FormGroup;
   books: Book[] = [];
-  touchedFields: { [key: string]: boolean } = {};
+  formErrors: { [key: string]: string } = {};
+  private apiUrl = 'http://localhost:5000/books';
 
   constructor(
     private fb: FormBuilder,
     private http: HttpClient
-  ) {}
-
-  ngOnInit(): void {
-    this.initForm();
-    this.loadBooks();
+  ) {
+    this.bookForm = this.createForm();
   }
 
-  initForm(): void {
-    this.bookForm = this.fb.group({
+  ngOnInit(): void {
+    this.fetchBooks();
+  }
+
+  createForm(): FormGroup {
+    const today = new Date().toISOString().split('T')[0];
+
+    return this.fb.group({
       title: ['', [
         Validators.required,
         Validators.minLength(2),
@@ -316,7 +282,7 @@ export class ClaudeComponent implements OnInit {
         Validators.required,
         Validators.pattern('^[0-9]{13}$')
       ]],
-      publication_date: ['', [
+      publication_date: [today, [
         Validators.required,
         this.futureDateValidator
       ]],
@@ -324,105 +290,117 @@ export class ClaudeComponent implements OnInit {
         Validators.required,
         Validators.min(1),
         Validators.max(5000),
-        Validators.pattern('^[0-9]+$')
+        Validators.pattern('^[0-9]*$')
       ]]
     });
   }
 
   futureDateValidator(control: AbstractControl): ValidationErrors | null {
-    if (!control.value) {
-      return null;
-    }
-
+    const inputDate = new Date(control.value);
     const today = new Date();
+
+    // Reset hours, minutes, seconds to make the comparison date-only
     today.setHours(0, 0, 0, 0);
 
-    const inputDate = new Date(control.value);
-    inputDate.setHours(0, 0, 0, 0);
+    if (inputDate > today) {
+      return { 'futureDate': true };
+    }
 
-    return inputDate > today ? { futureDate: true } : null;
+    return null;
   }
 
-  onBlur(fieldName: string): void {
-    this.touchedFields[fieldName] = true;
-  }
-
-  showError(fieldName: string): boolean {
+  validateField(fieldName: string): void {
     const control = this.bookForm.get(fieldName);
-    return !!(control && (this.touchedFields[fieldName] || control.touched) && control.invalid);
+    this.formErrors[fieldName] = '';
+
+    if (control && control.invalid && (control.dirty || control.touched)) {
+      const errorMessages: { [field: string]: { [validationType: string]: string } } = {
+        title: {
+          required: 'Title is required.',
+          minlength: 'Title must be between 2 and 100 characters.',
+          maxlength: 'Title must be between 2 and 100 characters.'
+        },
+        author: {
+          required: 'Author name is required.',
+          minlength: 'Author name must be between 2 and 60 characters.',
+          maxlength: 'Author name must be between 2 and 60 characters.'
+        },
+        isbn: {
+          required: 'ISBN is required.',
+          pattern: 'ISBN must contain exactly 13 numeric digits.'
+        },
+        publication_date: {
+          required: 'Publication Date is required.',
+          futureDate: 'Publication Date cannot be in the future.'
+        },
+        number_of_pages: {
+          required: 'Number of pages is required.',
+          min: 'Number of pages must be between 1 and 5000.',
+          max: 'Number of pages must be between 1 and 5000.',
+          pattern: 'Number of pages must be an integer.'
+        }
+      };
+
+      // Get the first error
+      const errors = control.errors;
+      if (errors) {
+        const firstError = Object.keys(errors)[0];
+        this.formErrors[fieldName] = errorMessages[fieldName][firstError];
+      }
+    }
   }
 
-  loadBooks(): void {
-    this.http.get<Book[]>('http://localhost:5000/books')
+  fetchBooks(): void {
+    this.http.get<Book[]>(this.apiUrl)
       .subscribe({
-        next: (data) => {
-          this.books = data;
+        next: (books) => {
+          this.books = books;
         },
-        error: (err) => {
-          console.error('Error loading books:', err);
+        error: (error) => {
+          console.error('Error fetching books:', error);
         }
       });
   }
 
-  formatDate(dateString: string): string {
-    if (!dateString) return '';
-
-    const date = new Date(dateString);
-    return date.toLocaleDateString();
-  }
-
   onSubmit(): void {
     if (this.bookForm.valid) {
-      // Create a copy of the form data to ensure date format is correct
-      const bookData = {
-        ...this.bookForm.value,
-        // Ensure the date is in YYYY-MM-DD format for the API
-        publication_date: this.formatDateForApi(this.bookForm.value.publication_date)
-      };
+      const formValues = this.bookForm.value;
 
-      this.http.post<Book>('http://localhost:5000/books', bookData)
+      this.http.post<Book>(this.apiUrl, formValues)
         .subscribe({
           next: (newBook) => {
-            this.books.unshift(newBook); // Add to the top of the list
-            this.bookForm.reset(); // Clear the form
-            this.touchedFields = {}; // Reset touched fields
+            // Add new book to the beginning of the array
+            this.books.unshift(newBook);
+
+            // Reset the form
+            this.bookForm.reset({
+              publication_date: new Date().toISOString().split('T')[0]
+            });
+
+            // Clear form errors
+            this.formErrors = {};
           },
-          error: (err) => {
-            console.error('Error submitting book:', err);
+          error: (error) => {
+            console.error('Error submitting form:', error);
 
-            // Handle validation errors from the server
-            if (err.status === 400 && err.error?.errors) {
-              const validationErrors: ValidationErrorResponse = err.error;
-
-              // Apply server validation errors to the form
-              Object.keys(validationErrors.errors).forEach(field => {
-                const control = this.bookForm.get(field);
-                if (control) {
-                  control.setErrors({ serverError: validationErrors.errors[field] });
-                  control.markAsTouched();
-                  this.touchedFields[field] = true;
-                }
+            // Handle validation error responses from the server
+            if (error.status === 400 && error.error && error.error.errors) {
+              const validationErrors: ValidationErrorResponse = error.error;
+              Object.keys(validationErrors.errors).forEach(key => {
+                this.formErrors[key] = validationErrors.errors[key][0];
               });
             }
           }
         });
     } else {
-      // Mark all fields as touched to show validation errors
+      // Mark all fields as touched to trigger validation messages
       Object.keys(this.bookForm.controls).forEach(key => {
         const control = this.bookForm.get(key);
         if (control) {
           control.markAsTouched();
-          this.touchedFields[key] = true;
+          this.validateField(key);
         }
       });
     }
-  }
-
-  // Helper method to format date for API submission (YYYY-MM-DD)
-  formatDateForApi(dateString: string): string {
-    if (!dateString) return '';
-
-    const date = new Date(dateString);
-    return date.toISOString().split('T')[0];
   }
 }
