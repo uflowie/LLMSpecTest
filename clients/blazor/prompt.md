@@ -1,6 +1,6 @@
 # Blazor Book Management Implementation Task
 ## Task Overview
-Implement a Blazor component that provides a form for creating book entries and a data grid to display them. The implementation should follow the specification and use the API defined in the OpenAPI document below. Do not use any third-party libraries for the form or data grid. There are no pre-installed CSS libraries. The page url should be "/claude".
+Implement a Blazor component that provides a form for creating book entries and a data grid to display them. The implementation should follow the specification and use the API defined in the OpenAPI document below. Do not use any third-party libraries for the form or data grid. There are no pre-installed CSS libraries.
 ## Specifications
 ### UI/UX Specification
 ```markdown
