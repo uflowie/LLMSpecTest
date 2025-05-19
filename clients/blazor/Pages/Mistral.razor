@@ -1,0 +1,124 @@
+@page "/mistral"
+@using System.ComponentModel.DataAnnotations
+@using System.Net.Http.Json
+
+<h3>Book Management</h3>
+
+<h4>Add Book</h4>
+
+<EditForm Model="@book" OnValidSubmit="@HandleValidSubmit">
+    <DataAnnotationsValidator />
+    <ValidationSummary />
+
+    <div>
+        <label for="title">Book Title</label>
+        <InputText id="title" @bind-Value="book.Title" data-testid="input-title" />
+        <ValidationMessage For="@(() => book.Title)" data-testid="error-title" />
+    </div>
+
+    <div>
+        <label for="author">Author Name</label>
+        <InputText id="author" @bind-Value="book.Author" data-testid="input-author" />
+        <ValidationMessage For="@(() => book.Author)" data-testid="error-author" />
+    </div>
+
+    <div>
+        <label for="isbn">ISBN Number</label>
+        <InputText id="isbn" @bind-Value="book.Isbn" data-testid="input-isbn" />
+        <ValidationMessage For="@(() => book.Isbn)" data-testid="error-isbn" />
+    </div>
+
+    <div>
+        <label for="publication_date">Publication Date</label>
+        <InputDate id="publication_date" @bind-Value="book.PublicationDate" data-testid="input-publication-date" />
+        <ValidationMessage For="@(() => book.PublicationDate)" data-testid="error-publication-date" />
+    </div>
+
+    <div>
+        <label for="number_of_pages">Number of Pages</label>
+        <InputNumber id="number_of_pages" @bind-Value="book.NumberOfPages" data-testid="input-pages" />
+        <ValidationMessage For="@(() => book.NumberOfPages)" data-testid="error-pages" />
+    </div>
+
+    <button type="submit" data-testid="btn-submit-book" disabled="@isDisabled">Add Book</button>
+</EditForm>
+
+<h4>Book List</h4>
+
+<table data-testid="data-grid-books">
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>Title</th>
+            <th>Author</th>
+            <th>ISBN</th>
+            <th>Publication Date</th>
+            <th>Pages</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var book in books)
+        {
+            <tr data-testid="@($"data-grid-row-{book.Id}")">
+                <td data-testid="@($"data-grid-cell-id-{book.Id}")">@book.Id</td>
+                <td data-testid="@($"data-grid-cell-title-{book.Id}")">@book.Title</td>
+                <td data-testid="@($"data-grid-cell-author-{book.Id}")">@book.Author</td>
+                <td data-testid="@($"data-grid-cell-isbn-{book.Id}")">@book.Isbn</td>
+                <td data-testid="@($"data-grid-cell-publication-date-{book.Id}")">@book.PublicationDate.ToString("yyyy-MM-dd")</td>
+                <td data-testid="@($"data-grid-cell-pages-{book.Id}")">@book.NumberOfPages</td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+@code {
+    private Book book = new Book { PublicationDate = DateTime.Today };
+    private bool isDisabled = true;
+    private List<Book> books = new List<Book>();
+
+    [Inject]
+    private HttpClient Http { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Call your API to get the list of books
+        books = await Http.GetFromJsonAsync<List<Book>>("books");
+    }
+
+    private async Task HandleValidSubmit()
+    {
+        // Call your API to submit the book
+        var response = await Http.PostAsJsonAsync("books", book);
+        if (response.IsSuccessStatusCode)
+        {
+            // Clear the form
+            book = new Book { PublicationDate = DateTime.Today };
+            // Refresh the book list
+            books = await Http.GetFromJsonAsync<List<Book>>("books");
+        }
+    }
+
+    public class Book
+    {
+        public int Id { get; set; }
+
+        [Required]
+        [StringLength(100, MinimumLength = 2)]
+        public string Title { get; set; }
+
+        [Required]
+        [StringLength(60, MinimumLength = 2)]
+        public string Author { get; set; }
+
+        [Required]
+        [RegularExpression("^[0-9]{13}$")]
+        public string Isbn { get; set; }
+
+        [Required]
+        public DateTime PublicationDate { get; set; }
+
+        [Required]
+        [Range(1, 5000)]
+        public int NumberOfPages { get; set; }
+    }
+}

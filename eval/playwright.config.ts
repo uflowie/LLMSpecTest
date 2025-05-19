@@ -43,6 +43,13 @@ export default defineConfig({
       },
     },
     {
+      name: 'mistral-angular',
+      use: {
+        ...devices['Desktop Chrome'],
+        baseURL: 'http://localhost:4200/mistral',
+      },
+    },
+    {
       name: 'claude-blazor',
       use: {
         ...devices['Desktop Chrome'],
@@ -61,6 +68,13 @@ export default defineConfig({
       use: {
         ...devices['Desktop Chrome'],
         baseURL: 'http://localhost:5095/gemini',
+      },
+    },
+    {
+      name: 'mistral-blazor',
+      use: {
+        ...devices['Desktop Chrome'],
+        baseURL: 'http://localhost:5095/mistral',
       },
     },
   ],
