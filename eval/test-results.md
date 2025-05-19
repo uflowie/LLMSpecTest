@@ -10,7 +10,7 @@
 | TC1b: Default publication date value | ✅ | ✅ | ✅ | ✅ |
 | TC3: Submit button state reflects form validity | ✅ | ✅ | ✅ | ✅ |
 | TC4: Successful form submission, clears form, and updates data grid | ✅ | ✅ | ❌ | ❌ |
-| TC5: UI prevents submission of invalid forms | ✅ | ❌ | ❌ | ❌ |
+| TC5: UI prevents submission of invalid forms | ✅ | ✅ | ✅ | ✅ |
 | Title validation | ✅ | ✅ | ✅ | ✅ |
 
 ## Blazor Tests

@@ -11,13 +11,12 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: [
     ['html'],
-    ['json', { outputFile: 'test-results.json' }]
+    ['./md-reporter.ts', { outputFile: 'test-results.md' }]
   ],
   use: {
     trace: 'on-first-retry',
     headless: false,
     baseURL: "http://localhost:5000", // default baseURL for tests
-    // no global baseURL – each project sets its own
   },
 
   /* -------- ONE browser × THREE base-urls -------- */
