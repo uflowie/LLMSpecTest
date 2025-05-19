@@ -16,6 +16,7 @@ export default defineConfig({
   use: {
     trace: 'on-first-retry',
     headless: false,
+    baseURL: "http://localhost:5000", // default baseURL for tests
     // no global baseURL – each project sets its own
   },
 
@@ -79,6 +80,36 @@ export default defineConfig({
     },
   ],
 
-  /* (optional) start your dev server here */
-  // webServer: { … }
+  webServer: [
+    {
+      name: 'Blazor Client',
+      command: 'dotnet run',
+      url: 'http://localhost:5095',
+      cwd: '../clients/blazor',      // relative to /project/eval
+      reuseExistingServer: !process.env.CI,
+      timeout: 100000,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    },
+    {
+      name: 'Angular Client',
+      command: 'ng serve',
+      url: 'http://localhost:4200',
+      cwd: '../clients/angular/LLMTest',
+      reuseExistingServer: !process.env.CI,
+      timeout: 100000,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    },
+    {
+      name: 'Server',
+      command: 'python server.py',
+      url: 'http://localhost:5000',
+      cwd: '../server',
+      reuseExistingServer: !process.env.CI,
+      timeout: 100000,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    },
+  ],
 });
