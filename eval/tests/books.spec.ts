@@ -47,6 +47,32 @@ test.describe('Book Entry Form and Data Grid', () => {
   };
 
   test.beforeEach(async ({ page, baseURL }) => {
+    // Mock /books API with in-memory state
+    const books: any[] = [];
+    let nextId = 1;
+    await page.route('**/books', async route => {
+      const req = route.request();
+      if (req.method() === 'GET') {
+        await route.fulfill({
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(books),
+        });
+      } else if (req.method() === 'POST') {
+        const postData = req.postData() || '{}';
+        const data = JSON.parse(postData);
+        const book = { id: nextId++, ...data };
+        books.unshift(book);
+        await route.fulfill({
+          status: 201,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(book),
+        });
+      } else {
+        await route.continue();
+      }
+    });
+    // Navigate after mocks are in place
     await page.goto(baseURL!);
   });
 
@@ -321,5 +347,26 @@ test.describe('Book Entry Form and Data Grid', () => {
 
     const finalRowCount = await page.locator('[data-testid^="data-grid-row-"]').count();
     expect(finalRowCount).toBe(initialRowCount); // No new row added
+  });
+
+  test('TC6: verify POST body matches form fields', async ({ page }) => {
+    const book = generateBookData('verify-payload');
+
+    const [request] = await Promise.all([
+      page.waitForRequest(req =>
+        req.url().endsWith('/books') && req.method() === 'POST'
+      ),
+      fillBookForm(page, book),
+      page.locator(selectors.submitButton).click(),
+    ]);
+
+    const body = request.postDataJSON();
+    expect(body).toEqual({
+      title: book.title,
+      author: book.author,
+      isbn: book.isbn,
+      publication_date: book.publication_date,
+      number_of_pages: parseInt(book.number_of_pages),
+    });
   });
 });

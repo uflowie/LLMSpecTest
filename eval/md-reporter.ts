@@ -25,7 +25,7 @@ class MarkdownReporter implements Reporter {
         if (status === 'passed') {
             return '✅';
         }
-        if (status === 'failed') {
+        if (status === 'failed' || status === 'timedOut') {
             return '❌';
         }
         // Covers 'timedOut', 'skipped', 'interrupted'

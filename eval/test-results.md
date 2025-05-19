@@ -11,6 +11,7 @@
 | TC3: Submit button state reflects form validity | ✅ | ✅ | ✅ | ✅ |
 | TC4: Successful form submission, clears form, and updates data grid | ✅ | ✅ | ❌ | ❌ |
 | TC5: UI prevents submission of invalid forms | ✅ | ✅ | ✅ | ✅ |
+| TC6: verify POST body matches form fields | ✅ | ✅ | ✅ | ✅ |
 | Title validation | ✅ | ✅ | ✅ | ✅ |
 
 ## Blazor Tests
@@ -26,5 +27,6 @@
 | TC3: Submit button state reflects form validity | ❌ | ❌ | ❌ | ❌ |
 | TC4: Successful form submission, clears form, and updates data grid | ❌ | ❌ | ❌ | ❌ |
 | TC5: UI prevents submission of invalid forms | ✅ | ❌ | ✅ | ✅ |
+| TC6: verify POST body matches form fields | ❌ | ❌ | ❌ | ❌ |
 | Title validation | ✅ | ❌ | ❌ | ❌ |
 
