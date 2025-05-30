@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Book Management</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f4f4f4;
+            color: #333;
+        }
+
+        #app-container {
+            max-width: 900px;
+            margin: auto;
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+
+        h1, h2 {
+            color: #333;
+            text-align: center;
+        }
+        
+        hr {
+            margin-top: 20px;
+            margin-bottom: 20px;
+            border: 0;
+            border-top: 1px solid #eee;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        .form-group input[type="text"],
+        .form-group input[type="number"],
+        .form-group input[type="date"] {
+            width: calc(100% - 22px); /* Account for padding and border */
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+
+        .error-message {
+            color: red;
+            font-size: 0.9em;
+            margin-top: 5px;
+            display: none; /* Hidden by default */
+        }
+
+        #btn-submit-book {
+            background-color: #5cb85c;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1em;
+        }
+
+        #btn-submit-book:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
+        #book-data-grid-section {
+            margin-top: 30px;
+        }
+
+        #data-grid-books {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+
+        #data-grid-books th,
+        #data-grid-books td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+
+        #data-grid-books th {
+            background-color: #f0f0f0;
+        }
+    </style>
+</head>
+<body>
+    <div id="app-container">
+        <h1>Book Management System 📚</h1>
+
+        <section id="book-form-section">
+            <h2>Add New Book</h2>
+            <form id="bookForm">
+                <div class="form-group">
+                    <label for="input-title">Book Title</label>
+                    <input type="text" id="input-title" data-testid="input-title" placeholder="Enter book title">
+                    <div class="error-message" data-testid="error-title"></div>
+                </div>
+
+                <div class="form-group">
+                    <label for="input-author">Author Name</label>
+                    <input type="text" id="input-author" data-testid="input-author" placeholder="Enter author name">
+                    <div class="error-message" data-testid="error-author"></div>
+                </div>
+
+                <div class="form-group">
+                    <label for="input-isbn">ISBN Number</label>
+                    <input type="text" id="input-isbn" data-testid="input-isbn" placeholder="Enter 13-digit ISBN number">
+                    <div class="error-message" data-testid="error-isbn"></div>
+                </div>
+
+                <div class="form-group">
+                    <label for="input-publication-date">Publication Date</label>
+                    <input type="date" id="input-publication-date" data-testid="input-publication-date">
+                    <div class="error-message" data-testid="error-publication-date"></div>
+                </div>
+
+                <div class="form-group">
+                    <label for="input-pages">Number of Pages</label>
+                    <input type="number" id="input-pages" data-testid="input-pages" placeholder="Enter number of pages">
+                    <div class="error-message" data-testid="error-pages"></div>
+                </div>
+
+                <button type="submit" id="btn-submit-book" data-testid="btn-submit-book">Add Book</button>
+            </form>
+        </section>
+
+        <hr/>
+
+        <section id="book-data-grid-section">
+            <h2>Book Collection</h2>
+            <table data-testid="data-grid-books">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Title</th>
+                        <th>Author</th>
+                        <th>ISBN</th>
+                        <th>Publication Date</th>
+                        <th>Pages</th>
+                    </tr>
+                </thead>
+                <tbody id="bookGridBody">
+                    </tbody>
+            </table>
+        </section>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // API Base URL (assuming relative paths)
+            const API_URL = '/books';
+
+            // Form elements
+            const bookForm = document.getElementById('bookForm');
+            const titleInput = document.getElementById('input-title');
+            const authorInput = document.getElementById('input-author');
+            const isbnInput = document.getElementById('input-isbn');
+            const publicationDateInput = document.getElementById('input-publication-date');
+            const pagesInput = document.getElementById('input-pages');
+            const submitButton = document.getElementById('btn-submit-book');
+
+            // Error message elements
+            const titleError = document.querySelector('[data-testid="error-title"]');
+            const authorError = document.querySelector('[data-testid="error-author"]');
+            const isbnError = document.querySelector('[data-testid="error-isbn"]');
+            const publicationDateError = document.querySelector('[data-testid="error-publication-date"]');
+            const pagesError = document.querySelector('[data-testid="error-pages"]');
+
+            // Data grid body
+            const bookGridBody = document.getElementById('bookGridBody');
+
+            let books = []; // To store book data
+
+            // --- Helper Functions ---
+            function getTodayDateString() {
+                const today = new Date();
+                const year = today.getFullYear();
+                const month = String(today.getMonth() + 1).padStart(2, '0');
+                const day = String(today.getDate()).padStart(2, '0');
+                return `${year}-${month}-${day}`;
+            }
+
+            function getTodayForComparison() {
+                const today = new Date();
+                today.setHours(0, 0, 0, 0); // Normalize to midnight
+                return today;
+            }
+
+            // --- Validation Functions ---
+            const validators = {
+                title: (value) => {
+                    if (!value || value.trim().length < 2 || value.trim().length > 100) {
+                        return 'Title must be between 2 and 100 characters.';
+                    }
+                    return '';
+                },
+                author: (value) => {
+                    if (!value || value.trim().length < 2 || value.trim().length > 60) {
+                        return 'Author name must be between 2 and 60 characters.';
+                    }
+                    return '';
+                },
+                isbn: (value) => {
+                    if (!value || !/^\d{13}$/.test(value)) {
+                        return 'ISBN must contain exactly 13 numeric digits.';
+                    }
+                    return '';
+                },
+                publication_date: (value) => {
+                    if (!value) {
+                        return 'Publication Date is required.';
+                    }
+                    const inputDate = new Date(value);
+                    // Adjust inputDate to UTC midnight to avoid timezone issues with getTodayForComparison()
+                    inputDate.setMinutes(inputDate.getMinutes() + inputDate.getTimezoneOffset());
+
+                    if (inputDate > getTodayForComparison()) {
+                        return 'Publication Date cannot be in the future.';
+                    }
+                    return '';
+                },
+                number_of_pages: (value) => {
+                    const numPages = Number(value);
+                    if (value === '' || !Number.isInteger(numPages) || numPages < 1 || numPages > 5000) {
+                        return 'Number of pages must be between 1 and 5000.';
+                    }
+                    return '';
+                }
+            };
+
+            function validateField(inputElement, errorElement, validatorFn) {
+                const errorMessage = validatorFn(inputElement.value);
+                errorElement.textContent = errorMessage;
+                errorElement.style.display = errorMessage ? 'block' : 'none';
+                return !errorMessage; // Returns true if valid, false if invalid
+            }
+
+            function checkFormValidity() {
+                const isTitleValid = validateField(titleInput, titleError, validators.title);
+                const isAuthorValid = validateField(authorInput, authorError, validators.author);
+                const isIsbnValid = validateField(isbnInput, isbnError, validators.isbn);
+                const isPublicationDateValid = validateField(publicationDateInput, publicationDateError, validators.publication_date);
+                const isPagesValid = validateField(pagesInput, pagesError, validators.number_of_pages);
+
+                const isFormValid = isTitleValid && isAuthorValid && isIsbnValid && isPublicationDateValid && isPagesValid;
+                submitButton.disabled = !isFormValid;
+                return isFormValid;
+            }
+
+            // --- Event Listeners for Real-time Validation ---
+            [titleInput, authorInput, isbnInput, publicationDateInput, pagesInput].forEach(input => {
+                const errorElement = document.querySelector(`[data-testid="error-${input.id.split('-')[1]}"]`);
+                 if (input.id === 'input-publication-date') { // publication-date needs special handling for error-testid
+                    errorElement = document.querySelector(`[data-testid="error-publication-date"]`);
+                } else if (input.id === 'input-pages') {
+                     errorElement = document.querySelector(`[data-testid="error-pages"]`);
+                }
+
+
+                input.addEventListener('input', () => validateField(input, errorElement, validators[input.id.replace('input-','').replace('-','_')]));
+                input.addEventListener('blur', () => validateField(input, errorElement, validators[input.id.replace('input-','').replace('-','_')]));
+                
+                // Continuous check for submit button state after each input/blur
+                input.addEventListener('input', checkFormValidity);
+                input.addEventListener('blur', checkFormValidity);
+            });
+            
+            // Special handling for publication-date and pages due to data-testid naming
+             publicationDateInput.addEventListener('input', () => validateField(publicationDateInput, publicationDateError, validators.publication_date));
+             publicationDateInput.addEventListener('blur', () => validateField(publicationDateInput, publicationDateError, validators.publication_date));
+             publicationDateInput.addEventListener('input', checkFormValidity);
+             publicationDateInput.addEventListener('blur', checkFormValidity);
+
+             pagesInput.addEventListener('input', () => validateField(pagesInput, pagesError, validators.number_of_pages));
+             pagesInput.addEventListener('blur', () => validateField(pagesInput, pagesError, validators.number_of_pages));
+             pagesInput.addEventListener('input', checkFormValidity);
+             pagesInput.addEventListener('blur', checkFormValidity);
+
+
+            // --- Data Grid Rendering ---
+            function renderDataGrid() {
+                bookGridBody.innerHTML = ''; // Clear existing rows
+                books.forEach(book => {
+                    const row = bookGridBody.insertRow(); // Inserts at the end, but we want newest on top
+                                                        // The `books` array itself will be newest-first.
+                    row.setAttribute('data-testid', `data-grid-row-${book.id}`);
+
+                    const cellId = row.insertCell();
+                    cellId.textContent = book.id;
+                    cellId.setAttribute('data-testid', `data-grid-cell-id-${book.id}`);
+
+                    const cellTitle = row.insertCell();
+                    cellTitle.textContent = book.title;
+                    cellTitle.setAttribute('data-testid', `data-grid-cell-title-${book.id}`);
+
+                    const cellAuthor = row.insertCell();
+                    cellAuthor.textContent = book.author;
+                    cellAuthor.setAttribute('data-testid', `data-grid-cell-author-${book.id}`);
+
+                    const cellIsbn = row.insertCell();
+                    cellIsbn.textContent = book.isbn;
+                    cellIsbn.setAttribute('data-testid', `data-grid-cell-isbn-${book.id}`);
+
+                    const cellPubDate = row.insertCell();
+                    cellPubDate.textContent = book.publication_date; // Already YYYY-MM-DD
+                    cellPubDate.setAttribute('data-testid', `data-grid-cell-publication-date-${book.id}`);
+
+                    const cellPages = row.insertCell();
+                    cellPages.textContent = book.number_of_pages;
+                    cellPages.setAttribute('data-testid', `data-grid-cell-pages-${book.id}`);
+                });
+            }
+
+            // --- API Interaction ---
+            async function fetchBooks() {
+                try {
+                    const response = await fetch(API_URL);
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    books = await response.json(); // API returns newest first
+                    renderDataGrid();
+                } catch (error) {
+                    console.error('Failed to fetch books:', error);
+                    // Optionally display an error message to the user in the UI
+                }
+            }
+
+            async function addBook(bookData) {
+                try {
+                    const response = await fetch(API_URL, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(bookData),
+                    });
+                    if (!response.ok) {
+                        const errorData = await response.json().catch(() => ({ message: 'Unknown error occurred' }));
+                        throw new Error(`HTTP error! status: ${response.status}, Message: ${errorData.message || response.statusText}`);
+                    }
+                    const newBook = await response.json();
+                    books.unshift(newBook); // Add to the beginning of the array (top of the grid)
+                    renderDataGrid();
+                    clearForm();
+                } catch (error) {
+                    console.error('Failed to add book:', error);
+                    alert(`Error adding book: ${error.message}`); // Simple alert for user feedback
+                }
+            }
+
+            // --- Form Submission ---
+            function clearForm() {
+                bookForm.reset(); // Resets input values
+                publicationDateInput.value = getTodayDateString(); // Reset date to today
+                
+                // Clear error messages manually
+                [titleError, authorError, isbnError, publicationDateError, pagesError].forEach(el => {
+                    el.textContent = '';
+                    el.style.display = 'none';
+                });
+                checkFormValidity(); // This will disable the submit button
+            }
+
+            bookForm.addEventListener('submit', async (event) => {
+                event.preventDefault();
+                if (checkFormValidity()) {
+                    const bookData = {
+                        title: titleInput.value.trim(),
+                        author: authorInput.value.trim(),
+                        isbn: isbnInput.value,
+                        publication_date: publicationDateInput.value,
+                        number_of_pages: parseInt(pagesInput.value, 10),
+                    };
+                    await addBook(bookData);
+                }
+            });
+
+            // --- Initialization ---
+            function initializePage() {
+                publicationDateInput.value = getTodayDateString();
+                submitButton.disabled = true; // Initially disable submit button
+                fetchBooks(); // Load initial books
+                checkFormValidity(); // Re-check validity to ensure button state is correct based on default values
+            }
+
+            initializePage();
+        });
+    </script>
+</body>
+</html>

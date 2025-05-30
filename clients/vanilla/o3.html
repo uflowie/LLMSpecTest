@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Book Manager</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 2rem;
+      line-height: 1.4;
+    }
+
+    form {
+      max-width: 500px;
+      margin-bottom: 2rem;
+      border: 1px solid #ccc;
+      padding: 1rem;
+      border-radius: 4px;
+    }
+
+    form fieldset {
+      border: none;
+      padding: 0;
+      margin: 0 0 1rem 0;
+    }
+
+    form label {
+      display: block;
+      margin-top: 0.5rem;
+      font-weight: bold;
+    }
+
+    form input[type="text"],
+    form input[type="number"],
+    form input[type="date"] {
+      width: 100%;
+      padding: 0.5rem;
+      margin-top: 0.25rem;
+      box-sizing: border-box;
+    }
+
+    .error-msg {
+      color: red;
+      font-size: 0.9rem;
+      min-height: 1.2rem;
+    }
+
+    button[disabled] {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th, td {
+      border: 1px solid #ccc;
+      padding: 0.5rem;
+      text-align: left;
+    }
+
+    th {
+      background: #f0f0f0;
+    }
+  </style>
+</head>
+<body>
+  <h1>Book Manager</h1>
+
+  <form id="book-form" novalidate>
+    <fieldset>
+      <label for="input-title">Book Title</label>
+      <input id="input-title" data-testid="input-title" type="text" placeholder="Enter book title" required minlength="2" maxlength="100">
+      <div class="error-msg" data-testid="error-title" aria-live="polite"></div>
+    </fieldset>
+
+    <fieldset>
+      <label for="input-author">Author Name</label>
+      <input id="input-author" data-testid="input-author" type="text" placeholder="Enter author name" required minlength="2" maxlength="60">
+      <div class="error-msg" data-testid="error-author" aria-live="polite"></div>
+    </fieldset>
+
+    <fieldset>
+      <label for="input-isbn">ISBN Number</label>
+      <input id="input-isbn" data-testid="input-isbn" type="text" placeholder="Enter 13-digit ISBN number" required pattern="\\d{13}">
+      <div class="error-msg" data-testid="error-isbn" aria-live="polite"></div>
+    </fieldset>
+
+    <fieldset>
+      <label for="input-publication-date">Publication Date</label>
+      <input id="input-publication-date" data-testid="input-publication-date" type="date" required>
+      <div class="error-msg" data-testid="error-publication-date" aria-live="polite"></div>
+    </fieldset>
+
+    <fieldset>
+      <label for="input-pages">Number of Pages</label>
+      <input id="input-pages" data-testid="input-pages" type="number" placeholder="Enter number of pages" required min="1" max="5000">
+      <div class="error-msg" data-testid="error-pages" aria-live="polite"></div>
+    </fieldset>
+
+    <button type="submit" id="btn-submit-book" data-testid="btn-submit-book" disabled>Add Book</button>
+  </form>
+
+  <h2>Books</h2>
+  <table data-testid="data-grid-books" aria-label="Books data grid">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Title</th>
+        <th>Author</th>
+        <th>ISBN</th>
+        <th>Publication Date</th>
+        <th>Pages</th>
+      </tr>
+    </thead>
+    <tbody id="data-grid-body"></tbody>
+  </table>
+
+  <script>
+    (function() {
+      const form = document.getElementById('book-form');
+      const submitBtn = document.getElementById('btn-submit-book');
+      const today = new Date().toISOString().split('T')[0];
+      const publicationInput = document.getElementById('input-publication-date');
+      publicationInput.value = today;
+
+      const inputs = {
+        title: document.getElementById('input-title'),
+        author: document.getElementById('input-author'),
+        isbn: document.getElementById('input-isbn'),
+        publication_date: publicationInput,
+        number_of_pages: document.getElementById('input-pages')
+      };
+
+      const errorEls = {
+        title: document.querySelector('[data-testid="error-title"]'),
+        author: document.querySelector('[data-testid="error-author"]'),
+        isbn: document.querySelector('[data-testid="error-isbn"]'),
+        publication_date: document.querySelector('[data-testid="error-publication-date"]'),
+        number_of_pages: document.querySelector('[data-testid="error-pages"]')
+      };
+
+      function validateField(name, value) {
+        switch (name) {
+          case 'title':
+            if (!value.trim() || value.length < 2 || value.length > 100) {
+              return 'Title must be between 2 and 100 characters.';
+            }
+            break;
+          case 'author':
+            if (!value.trim() || value.length < 2 || value.length > 60) {
+              return 'Author name must be between 2 and 60 characters.';
+            }
+            break;
+          case 'isbn':
+            if (!/^\\d{13}$/.test(value)) {
+              return 'ISBN must contain exactly 13 numeric digits.';
+            }
+            break;
+          case 'publication_date':
+            if (!value) {
+              return 'Publication Date is required.';
+            }
+            if (value > today) {
+              return 'Publication Date cannot be in the future.';
+            }
+            break;
+          case 'number_of_pages':
+            const pages = parseInt(value, 10);
+            if (isNaN(pages) || pages < 1 || pages > 5000) {
+              return 'Number of pages must be between 1 and 5000.';
+            }
+            break;
+          default:
+            return 'Invalid field.';
+        }
+        return '';
+      }
+
+      function validateForm() {
+        let isValid = true;
+        for (const key in inputs) {
+          const value = inputs[key].value;
+          const error = validateField(key, value);
+          errorEls[key].textContent = error;
+          if (error) isValid = false;
+        }
+        submitBtn.disabled = !isValid;
+        return isValid;
+      }
+
+      // Attach listeners
+      for (const key in inputs) {
+        const inputEl = inputs[key];
+        ['input', 'change', 'blur'].forEach(evt => {
+          inputEl.addEventListener(evt, validateForm);
+        });
+      }
+
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (!validateForm()) return;
+
+        const newBook = {
+          title: inputs.title.value.trim(),
+          author: inputs.author.value.trim(),
+          isbn: inputs.isbn.value.trim(),
+          publication_date: inputs.publication_date.value,
+          number_of_pages: parseInt(inputs.number_of_pages.value, 10)
+        };
+
+        try {
+          const res = await fetch('/books', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(newBook)
+          });
+          if (!res.ok) {
+            throw new Error('Network response was not ok');
+          }
+          const created = await res.json();
+          prependRow(created);
+          form.reset();
+          publicationInput.value = today;
+          validateForm();
+        } catch (err) {
+          alert('Failed to add book: ' + err.message);
+        }
+      });
+
+      async function fetchBooks() {
+        try {
+          const res = await fetch('/books');
+          if (!res.ok) throw new Error('Failed to fetch books');
+          const books = await res.json();
+          books.forEach(prependRow);
+        } catch (err) {
+          console.error(err);
+        }
+      }
+
+      function prependRow(book) {
+        const tbody = document.getElementById('data-grid-body');
+        const row = document.createElement('tr');
+        row.setAttribute('data-testid', 'data-grid-row-' + book.id);
+        row.innerHTML = `
+          <td data-testid="data-grid-cell-id-${book.id}">${book.id}</td>
+          <td data-testid="data-grid-cell-title-${book.id}"></td>
+          <td data-testid="data-grid-cell-author-${book.id}"></td>
+          <td data-testid="data-grid-cell-isbn-${book.id}"></td>
+          <td data-testid="data-grid-cell-publication-date-${book.id}"></td>
+          <td data-testid="data-grid-cell-pages-${book.id}"></td>
+        `;
+        row.querySelector('[data-testid="data-grid-cell-title-' + book.id + '"]').textContent = book.title;
+        row.querySelector('[data-testid="data-grid-cell-author-' + book.id + '"]').textContent = book.author;
+        row.querySelector('[data-testid="data-grid-cell-isbn-' + book.id + '"]').textContent = book.isbn;
+        row.querySelector('[data-testid="data-grid-cell-publication-date-' + book.id + '"]').textContent = book.publication_date;
+        row.querySelector('[data-testid="data-grid-cell-pages-' + book.id + '"]').textContent = book.number_of_pages;
+        tbody.prepend(row);
+      }
+
+      // Initialize
+      validateForm();
+      fetchBooks();
+    })();
+  </script>
+</body>
+</html>

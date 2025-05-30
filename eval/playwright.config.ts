@@ -42,6 +42,17 @@ export default defineConfig({
         baseURL: `http://localhost:5095/${path}`,
       },
     })),
+    
+    // Vanilla HTML projects
+    ...[
+      'claude', 'o3', 'gemini', 'mistral', 'gemini-diffusion'
+    ].map(path => ({
+      name: `${path}-vanilla`,
+      use: {
+        ...devices['Desktop Chrome'],
+        baseURL: `http://localhost:8080/${path}.html`,
+      },
+    })),
   ],
 
   webServer: [
@@ -60,6 +71,16 @@ export default defineConfig({
       command: 'ng serve',
       url: 'http://localhost:4200',
       cwd: '../clients/angular/LLMTest',
+      reuseExistingServer: !process.env.CI,
+      timeout: 100000,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    },
+    {
+      name: 'Vanilla HTML Client',
+      command: 'npx http-server -p 8080',
+      url: 'http://localhost:8080',
+      cwd: '../clients/vanilla',
       reuseExistingServer: !process.env.CI,
       timeout: 100000,
       stdout: 'pipe',
