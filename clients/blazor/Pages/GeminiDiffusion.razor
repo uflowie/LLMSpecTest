@@ -1,0 +1,186 @@
+@using System.Net.Http.Json
+@using System.ComponentModel.DataAnnotations
+@using System.Globalization
+
+@inject HttpClient HttpClient
+
+@page "/gemini-diffusion"
+
+<div class="container p-4">
+    <h3>Create New Book</h3>
+
+    <EditForm Model="@newBook" OnValidSubmit="@HandleValidSubmit">
+        <DataAnnotationsValidator />
+
+        <div class="mb-3">
+            <label for="input-title" class="form-label">Book Title</label>
+            <InputText id="input-title" @bind-Value="newBook.Title" class="form-control" placeholder="Enter book title" data-testid="input-title" />
+            <ValidationMessage For="@(() => newBook.Title)" class="text-danger" data-testid="error-title" />
+        </div>
+
+        <div class="mb-3">
+            <label for="input-author" class="form-label">Author Name</label>
+            <InputText id="input-author" @bind-Value="newBook.Author" class="form-control" placeholder="Enter author name" data-testid="input-author" />
+            <ValidationMessage For="@(() => newBook.Author)" class="text-danger" data-testid="error-author" />
+        </div>
+
+        <div class="mb-3">
+            <label for="input-isbn" class="form-label">ISBN Number</label>
+            <InputText id="input-isbn" @bind-Value="newBook.Isbn" class="form-control" placeholder="Enter 13-digit ISBN number" data-testid="input-isbn" />
+            <ValidationMessage For="@(() => newBook.Isbn)" class="text-danger" data-testid="error-isbn" />
+        </div>
+
+        <div class="mb-3">
+            <label for="input-publication-date" class="form-label">Publication Date</label>
+            <InputDate id="input-publication-date" @bind-Value="newBook.PublicationDate" class="form-control" data-testid="input-publication-date" />
+            <ValidationMessage For="@(() => newBook.PublicationDate)" class="text-danger" data-testid="error-publication-date" />
+        </div>
+
+        <div class="mb-3">
+            <label for="input-pages" class="form-label">Number of Pages</label>
+            <InputNumber id="input-pages" @bind-Value="newBook.NumberOfPages" class="form-control" placeholder="Enter number of pages" data-testid="input-pages" />
+            <ValidationMessage For="@(() => newBook.NumberOfPages)" class="text-danger" data-testid="error-pages" />
+        </div>
+
+        <button type="submit" class="btn btn-primary" disabled="@(!FormValid)" data-testid="btn-submit-book">
+            Add Book
+        </button>
+    </EditForm>
+
+    <hr />
+
+    <h3>Book List</h3>
+
+    @if (books == null)
+    {
+        <p><em>Loading books...</em></p>
+    }
+    else if (!books.Any())
+    {
+        <p><em>No books yet.</em></p>
+    }
+    else
+    {
+        <table class="table table-striped" data-testid="data-grid-books">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Title</th>
+                    <th>Author</th>
+                    <th>ISBN</th>
+                    <th>Publication Date</th>
+                    <th>Pages</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var book in books)
+                {
+                    <tr data-testid="@($"data-grid-row-{book.Id}")">
+                        <td data-testid="@($"data-grid-cell-id-{book.Id}")">@book.Id</td>
+                        <td data-testid="@($"data-grid-cell-title-{book.Id}")">@book.Title</td>
+                        <td data-testid="@($"data-grid-cell-author-{book.Id}")">@book.Author</td>
+                        <td data-testid="@($"data-grid-cell-isbn-{book.Id}")">@book.Isbn</td>
+                        <td data-testid="@($"data-grid-cell-publication-date-{book.Id}")">@book.PublicationDate.ToString("yyyy-MM-dd")</td>
+                        <td data-testid="@($"data-grid-cell-pages-{book.Id}")">@book.NumberOfPages</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+@code {
+    public class BookInput
+    {
+        [Required]
+        [StringLength(100, MinimumLength = 2, ErrorMessage = "Title must be between 2 and 100 characters.")]
+        public string Title { get; set; }
+
+        [Required]
+        [StringLength(60, MinimumLength = 2, ErrorMessage = "Author name must be between 2 and 60 characters.")]
+        public string Author { get; set; }
+
+        [Required]
+        [RegularExpression(@"^[0-9]{13}$", ErrorMessage = "ISBN must contain exactly 13 numeric digits.")]
+        public string Isbn { get; set; }
+
+        [Required]
+        [DateValidation(ErrorMessage = "Publication Date cannot be in the future.")]
+        public DateTime PublicationDate { get; set; }
+
+        [Required]
+        [Range(1, 5000, ErrorMessage = "Number of pages must be between 1 and 5000.")]
+        public int NumberOfPages { get; set; }
+    }
+
+    public class Book : BookInput
+    {
+        public int Id { get; set; }
+    }
+
+    public class DateValidationAttribute : ValidationAttribute
+    {
+        protected override ValidationResult IsValid(object value, ValidationContext validationContext)
+        {
+            if (value is DateTime date)
+            {
+                if (date > DateTime.Today)
+                {
+                    return new ValidationResult(ErrorMessage);
+                }
+            }
+            return ValidationResult.Success;
+        }
+    }
+
+    private List<Book> books;
+    private BookInput newBook = new BookInput { PublicationDate = DateTime.Today };
+    private bool FormValid = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadBooks();
+    }
+
+    private async Task LoadBooks()
+    {
+        try
+        {
+            books = await HttpClient.GetFromJsonAsync<List<Book>>("/books");
+        }
+        catch (Exception ex)
+        {
+            // Handle potential errors (e.g., log error, display error message)
+            Console.WriteLine($"Error loading books: {ex.Message}");
+            books = new List<Book>(); // Initialize as empty list on error
+        }
+    }
+
+    private async Task HandleValidSubmit()
+    {
+        try
+        {
+            var response = await HttpClient.PostAsJsonAsync("/books", newBook);
+            if (response.IsSuccessStatusCode)
+            {
+                var createdBook = await response.Content.ReadFromJsonAsync<Book>();
+                if (createdBook != null)
+                {
+                    books.Insert(0, createdBook); // Add to the beginning of the list
+                    newBook = new BookInput { PublicationDate = DateTime.Today }; // Reset the form
+                    StateHasChanged(); // Trigger UI refresh
+                }
+            }
+            else
+            {
+                // Handle API errors (e.g., display error message)
+                Console.WriteLine($"Error creating book: {response.StatusCode}");
+            }
+        }
+        catch (Exception ex)
+        {
+            // Handle potential errors (e.g., log error, display error message)
+            Console.WriteLine($"Error submitting book: {ex.Message}");
+        }
+    }
+}

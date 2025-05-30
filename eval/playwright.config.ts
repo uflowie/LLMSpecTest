@@ -21,62 +21,27 @@ export default defineConfig({
 
   /* -------- ONE browser × THREE base-urls -------- */
   projects: [
-    {
-      name: 'claude-angular',
+    // Angular projects
+    ...[
+      'claude', 'o3', 'gemini', 'mistral', 'gemini-diffusion'
+    ].map(path => ({
+      name: `${path}-angular`,
       use: {
         ...devices['Desktop Chrome'],
-        baseURL: 'http://localhost:4200/claude',
+        baseURL: `http://localhost:4200/${path}`,
       },
-    },
-    {
-      name: 'o3-angular',
+    })),
+    
+    // Blazor projects
+    ...[
+      'claude', 'o3', 'gemini', 'mistral', 'gemini-diffusion'
+    ].map(path => ({
+      name: `${path.replace('gemini-diffusion', 'geminidiffusion')}-blazor`,
       use: {
         ...devices['Desktop Chrome'],
-        baseURL: 'http://localhost:4200/o3',
+        baseURL: `http://localhost:5095/${path}`,
       },
-    },
-    {
-      name: 'gemini-angular',
-      use: {
-        ...devices['Desktop Chrome'],
-        baseURL: 'http://localhost:4200/gemini',
-      },
-    },
-    {
-      name: 'mistral-angular',
-      use: {
-        ...devices['Desktop Chrome'],
-        baseURL: 'http://localhost:4200/mistral',
-      },
-    },
-    {
-      name: 'claude-blazor',
-      use: {
-        ...devices['Desktop Chrome'],
-        baseURL: 'http://localhost:5095/claude',
-      },
-    },
-    {
-      name: 'o3-blazor',
-      use: {
-        ...devices['Desktop Chrome'],
-        baseURL: 'http://localhost:5095/o3',
-      },
-    },
-    {
-      name: 'gemini-blazor',
-      use: {
-        ...devices['Desktop Chrome'],
-        baseURL: 'http://localhost:5095/gemini',
-      },
-    },
-    {
-      name: 'mistral-blazor',
-      use: {
-        ...devices['Desktop Chrome'],
-        baseURL: 'http://localhost:5095/mistral',
-      },
-    },
+    })),
   ],
 
   webServer: [

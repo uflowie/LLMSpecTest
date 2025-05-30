@@ -1,23 +1,25 @@
-@page "/o3"
+@* --------------------------------------------------------------------
+   BookManagement.razor
+   A self-contained Blazor component implementing the book-entry form
+   and data grid exactly as specified (no third-party libraries).
+   ------------------------------------------------------------------ *@
 @using System.ComponentModel.DataAnnotations
-@using System.Text.Json.Serialization
 @inject HttpClient Http
 
-<h2>Book Management</h2>
+@page "/o3"
 
-<EditForm EditContext="_editContext" OnValidSubmit="HandleValidSubmit">
+<EditForm EditContext="@editContext" OnValidSubmit="HandleValidSubmit">
     <DataAnnotationsValidator />
 
     <div>
         <label for="title">Book Title</label>
         <InputText id="title"
                    data-testid="input-title"
-                   class="form-control"
-                   @bind-Value="_model.Title"
-                   @bind-Value:event="oninput"
-                   placeholder="Enter book title" />
-        <span class="validation-message" data-testid="error-title">
-            @_editContext?.GetValidationMessages(() => _model.Title).FirstOrDefault()
+                   placeholder="Enter book title"
+                   @bind-Value="bookInput.Title"
+                   @bind-Value:event="oninput" />
+        <span data-testid="error-title">
+            <ValidationMessage For="@(() => bookInput.Title)" />
         </span>
     </div>
 
@@ -25,12 +27,11 @@
         <label for="author">Author Name</label>
         <InputText id="author"
                    data-testid="input-author"
-                   class="form-control"
-                   @bind-Value="_model.Author"
-                   @bind-Value:event="oninput"
-                   placeholder="Enter author name" />
-        <span class="validation-message" data-testid="error-author">
-            @_editContext?.GetValidationMessages(() => _model.Author).FirstOrDefault()
+                   placeholder="Enter author name"
+                   @bind-Value="bookInput.Author"
+                   @bind-Value:event="oninput" />
+        <span data-testid="error-author">
+            <ValidationMessage For="@(() => bookInput.Author)" />
         </span>
     </div>
 
@@ -38,12 +39,11 @@
         <label for="isbn">ISBN Number</label>
         <InputText id="isbn"
                    data-testid="input-isbn"
-                   class="form-control"
-                   @bind-Value="_model.Isbn"
-                   @bind-Value:event="oninput"
-                   placeholder="Enter 13-digit ISBN number" />
-        <span class="validation-message" data-testid="error-isbn">
-            @_editContext?.GetValidationMessages(() => _model.Isbn).FirstOrDefault()
+                   placeholder="Enter 13-digit ISBN number"
+                   @bind-Value="bookInput.Isbn"
+                   @bind-Value:event="oninput" />
+        <span data-testid="error-isbn">
+            <ValidationMessage For="@(() => bookInput.Isbn)" />
         </span>
     </div>
 
@@ -51,11 +51,10 @@
         <label for="publication-date">Publication Date</label>
         <InputDate id="publication-date"
                    data-testid="input-publication-date"
-                   class="form-control"
-                   @bind-Value="_model.PublicationDate"
+                   @bind-Value="bookInput.PublicationDate"
                    @bind-Value:event="oninput" />
-        <span class="validation-message" data-testid="error-publication-date">
-            @_editContext?.GetValidationMessages(() => _model.PublicationDate).FirstOrDefault()
+        <span data-testid="error-publication-date">
+            <ValidationMessage For="@(() => bookInput.PublicationDate)" />
         </span>
     </div>
 
@@ -63,17 +62,22 @@
         <label for="pages">Number of Pages</label>
         <InputNumber id="pages"
                      data-testid="input-pages"
-                     class="form-control"
-                     @bind-Value="_model.NumberOfPages"
-                     @bind-Value:event="oninput"
-                     placeholder="Enter number of pages" />
-        <span class="validation-message" data-testid="error-pages">
-            @_editContext?.GetValidationMessages(() => _model.NumberOfPages).FirstOrDefault()
+                     placeholder="Enter number of pages"
+                     @bind-Value="bookInput.NumberOfPages"
+                     @bind-Value:event="oninput" />
+        <span data-testid="error-pages">
+            <ValidationMessage For="@(() => bookInput.NumberOfPages)" />
         </span>
     </div>
 
-    <button type="submit" data-testid="btn-submit-book" disabled="@(!_isValid)">Add Book</button>
+    <button type="submit"
+            data-testid="btn-submit-book"
+            disabled="@(!isFormValid)">
+        Add Book
+    </button>
 </EditForm>
+
+<hr />
 
 <table data-testid="data-grid-books">
     <thead>
@@ -87,7 +91,7 @@
         </tr>
     </thead>
     <tbody>
-        @foreach (var b in _books)
+        @foreach (var b in books)
         {
             <tr data-testid="data-grid-row-@b.Id">
                 <td data-testid="data-grid-cell-id-@b.Id">@b.Id</td>
@@ -102,102 +106,120 @@
 </table>
 
 @code {
-    private BookInput _model = new() { PublicationDate = DateTime.Today };
-    private EditContext _editContext;
-    private readonly List<Book> _books = new();
-    private bool _isValid;
-
-    protected override async Task OnInitializedAsync()
+    // ------------ Data-transfer and validation models ----------------
+    private class BookInput
     {
-        _editContext = new EditContext(_model);
-        _editContext.OnFieldChanged += (_, __) => ValidateForm();
-        ValidateForm();
+        [Required(ErrorMessage = "Title must be between 2 and 100 characters.")]
+        [StringLength(100, MinimumLength = 2,
+            ErrorMessage = "Title must be between 2 and 100 characters.")]
+        public string? Title { get; set; }
 
-        var fromServer = await Http.GetFromJsonAsync<List<Book>>("/books");
-        if (fromServer != null)
+        [Required(ErrorMessage = "Author name must be between 2 and 60 characters.")]
+        [StringLength(60, MinimumLength = 2,
+            ErrorMessage = "Author name must be between 2 and 60 characters.")]
+        public string? Author { get; set; }
+
+        [Required(ErrorMessage = "ISBN must contain exactly 13 numeric digits.")]
+        [RegularExpression(@"^\d{13}$",
+            ErrorMessage = "ISBN must contain exactly 13 numeric digits.")]
+        public string? Isbn { get; set; }
+
+        [Required(ErrorMessage = "Publication Date cannot be in the future.")]
+        [NotFutureDate(ErrorMessage = "Publication Date cannot be in the future.")]
+        public DateTime PublicationDate { get; set; } = DateTime.Today;
+
+        [Required(ErrorMessage = "Number of pages must be between 1 and 5000.")]
+        [Range(1, 5000,
+            ErrorMessage = "Number of pages must be between 1 and 5000.")]
+        public int? NumberOfPages { get; set; }
+    }
+
+    private class Book : BookInput
+    {
+        public int Id { get; set; }
+    }
+
+    /// <summary>
+    /// Ensures the date is not in the future (relative to the server/client clock).
+    /// </summary>
+    private sealed class NotFutureDateAttribute : ValidationAttribute
+    {
+        public override bool IsValid(object? value)
         {
-            _books.AddRange(fromServer);
+            if (value is DateTime dt)
+            {
+                return dt.Date <= DateTime.Today;
+            }
+            return true;
         }
     }
 
-    private void ValidateForm()
+    // -------------------- Component state ----------------------------
+    private BookInput bookInput = new();
+    private EditContext editContext = default!;
+    private bool isFormValid;
+
+    private readonly List<Book> books = new();
+
+    // ------------------- Lifecycle methods ---------------------------
+    protected override async Task OnInitializedAsync()
     {
-        _editContext.Validate();
-        _isValid = !_editContext.GetValidationMessages().Any();
-        InvokeAsync(StateHasChanged);
+        ResetEditContext();
+        await LoadBooksAsync();
     }
 
+    // ------------------- Event handlers ------------------------------
     private async Task HandleValidSubmit()
     {
-        var response = await Http.PostAsJsonAsync("/books", _model);
+        // Serialize & POST the valid book
+        var response = await Http.PostAsJsonAsync("/books", bookInput);
         if (response.IsSuccessStatusCode)
         {
             var created = await response.Content.ReadFromJsonAsync<Book>();
-            if (created != null)
+            if (created is not null)
             {
-                _books.Insert(0, created);
+                books.Insert(0, created); // newest on top
             }
-
-            _model = new BookInput { PublicationDate = DateTime.Today };
-            _editContext = new EditContext(_model);
-            _editContext.OnFieldChanged += (_, __) => ValidateForm();
-            ValidateForm();
+            // Clear form and reset validation
+            bookInput = new BookInput(); // PublicationDate defaults to Today
+            ResetEditContext();
         }
-    }
-
-    public class BookInput : IValidatableObject
-    {
-        [Required(ErrorMessage = "Title must be between 2 and 100 characters.")]
-        [StringLength(100, MinimumLength = 2, ErrorMessage = "Title must be between 2 and 100 characters.")]
-        [JsonPropertyName("title")]
-        public string Title { get; set; } = string.Empty;
-
-        [Required(ErrorMessage = "Author name must be between 2 and 60 characters.")]
-        [StringLength(60, MinimumLength = 2, ErrorMessage = "Author name must be between 2 and 60 characters.")]
-        [JsonPropertyName("author")]
-        public string Author { get; set; } = string.Empty;
-
-        [Required(ErrorMessage = "ISBN must contain exactly 13 numeric digits.")]
-        [RegularExpression("^[0-9]{13}$", ErrorMessage = "ISBN must contain exactly 13 numeric digits.")]
-        [JsonPropertyName("isbn")]
-        public string Isbn { get; set; } = string.Empty;
-
-        [Required(ErrorMessage = "Publication Date cannot be in the future.")]
-        [JsonPropertyName("publication_date")]
-        public DateTime PublicationDate { get; set; }
-
-        [Required(ErrorMessage = "Number of pages must be between 1 and 5000.")]
-        [Range(1, 5000, ErrorMessage = "Number of pages must be between 1 and 5000.")]
-        [JsonPropertyName("number_of_pages")]
-        public int? NumberOfPages { get; set; }
-
-        public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+        else
         {
-            if (PublicationDate > DateTime.Today)
-            {
-                yield return new ValidationResult("Publication Date cannot be in the future.", new[] { nameof(PublicationDate) });
-            }
+            // TODO: add real error handling / toast etc.
         }
     }
 
-    public class Book
+    // --------------- Helper / infrastructure methods -----------------
+    private void ResetEditContext()
     {
-        [JsonPropertyName("id")]
-        public int Id { get; set; }
+        editContext = new EditContext(bookInput);
+        editContext.OnFieldChanged += (_, __) => RecalculateButtonState();
+        editContext.OnValidationStateChanged += (_, __) => RecalculateButtonState();
+        RecalculateButtonState();
+        StateHasChanged();
+    }
 
-        [JsonPropertyName("title")]
-        public string Title { get; set; }
+    private void RecalculateButtonState()
+    {
+        isFormValid = editContext.Validate(); // performs full validation
+        StateHasChanged();
+    }
 
-        [JsonPropertyName("author")]
-        public string Author { get; set; }
-
-        [JsonPropertyName("isbn")]
-        public string Isbn { get; set; }
-
-        [JsonPropertyName("publication_date")]
-        public DateTime PublicationDate { get; set; }
-
-        [JsonPropertyName("number_of_pages")]
-        public int NumberOfPages { get; set; }
+    private async Task LoadBooksAsync()
+    {
+        try
+        {
+            var fetched = await Http.GetFromJsonAsync<List<Book>>("/books");
+            if (fetched is not null)
+            {
+                books.Clear();
+                books.AddRange(fetched); // API returns newest first
+            }
+        }
+        catch
+        {
+            // TODO: add real error handling
+        }
     }
 }

@@ -1,10 +1,8 @@
 @page "/mistral"
+@inject HttpClient Http
 @using System.ComponentModel.DataAnnotations
-@using System.Net.Http.Json
 
 <h3>Book Management</h3>
-
-<h4>Add Book</h4>
 
 <EditForm Model="@book" OnValidSubmit="@HandleValidSubmit">
     <DataAnnotationsValidator />
@@ -12,38 +10,36 @@
 
     <div>
         <label for="title">Book Title</label>
-        <InputText id="title" @bind-Value="book.Title" data-testid="input-title" />
+        <InputText id="title" @bind-Value="book.Title" data-testid="input-title" placeholder="Enter book title" />
         <ValidationMessage For="@(() => book.Title)" data-testid="error-title" />
     </div>
 
     <div>
         <label for="author">Author Name</label>
-        <InputText id="author" @bind-Value="book.Author" data-testid="input-author" />
+        <InputText id="author" @bind-Value="book.Author" data-testid="input-author" placeholder="Enter author name" />
         <ValidationMessage For="@(() => book.Author)" data-testid="error-author" />
     </div>
 
     <div>
         <label for="isbn">ISBN Number</label>
-        <InputText id="isbn" @bind-Value="book.Isbn" data-testid="input-isbn" />
+        <InputText id="isbn" @bind-Value="book.Isbn" data-testid="input-isbn" placeholder="Enter 13-digit ISBN number" />
         <ValidationMessage For="@(() => book.Isbn)" data-testid="error-isbn" />
     </div>
 
     <div>
-        <label for="publication_date">Publication Date</label>
-        <InputDate id="publication_date" @bind-Value="book.PublicationDate" data-testid="input-publication-date" />
+        <label for="publication-date">Publication Date</label>
+        <InputDate id="publication-date" @bind-Value="book.PublicationDate" data-testid="input-publication-date" />
         <ValidationMessage For="@(() => book.PublicationDate)" data-testid="error-publication-date" />
     </div>
 
     <div>
-        <label for="number_of_pages">Number of Pages</label>
-        <InputNumber id="number_of_pages" @bind-Value="book.NumberOfPages" data-testid="input-pages" />
+        <label for="pages">Number of Pages</label>
+        <InputNumber id="pages" @bind-Value="book.NumberOfPages" data-testid="input-pages" placeholder="Enter number of pages" />
         <ValidationMessage For="@(() => book.NumberOfPages)" data-testid="error-pages" />
     </div>
 
     <button type="submit" data-testid="btn-submit-book" disabled="@isDisabled">Add Book</button>
 </EditForm>
-
-<h4>Book List</h4>
 
 <table data-testid="data-grid-books">
     <thead>
@@ -57,43 +53,36 @@
         </tr>
     </thead>
     <tbody>
-        @foreach (var book in books)
+        @foreach (var bookItem in books)
         {
-            <tr data-testid="@($"data-grid-row-{book.Id}")">
-                <td data-testid="@($"data-grid-cell-id-{book.Id}")">@book.Id</td>
-                <td data-testid="@($"data-grid-cell-title-{book.Id}")">@book.Title</td>
-                <td data-testid="@($"data-grid-cell-author-{book.Id}")">@book.Author</td>
-                <td data-testid="@($"data-grid-cell-isbn-{book.Id}")">@book.Isbn</td>
-                <td data-testid="@($"data-grid-cell-publication-date-{book.Id}")">@book.PublicationDate.ToString("yyyy-MM-dd")</td>
-                <td data-testid="@($"data-grid-cell-pages-{book.Id}")">@book.NumberOfPages</td>
+            <tr data-testid="@($"data-grid-row-{bookItem.Id}")">
+                <td data-testid="@($"data-grid-cell-id-{bookItem.Id}")">@bookItem.Id</td>
+                <td data-testid="@($"data-grid-cell-title-{bookItem.Id}")">@bookItem.Title</td>
+                <td data-testid="@($"data-grid-cell-author-{bookItem.Id}")">@bookItem.Author</td>
+                <td data-testid="@($"data-grid-cell-isbn-{bookItem.Id}")">@bookItem.Isbn</td>
+                <td data-testid="@($"data-grid-cell-publication-date-{bookItem.Id}")">@bookItem.PublicationDate.ToString("yyyy-MM-dd")</td>
+                <td data-testid="@($"data-grid-cell-pages-{bookItem.Id}")">@bookItem.NumberOfPages</td>
             </tr>
         }
     </tbody>
 </table>
 
 @code {
-    private Book book = new Book { PublicationDate = DateTime.Today };
-    private bool isDisabled = true;
+    private Book book = new Book();
     private List<Book> books = new List<Book>();
-
-    [Inject]
-    private HttpClient Http { get; set; }
+    private bool isDisabled = true;
 
     protected override async Task OnInitializedAsync()
     {
-        // Call your API to get the list of books
         books = await Http.GetFromJsonAsync<List<Book>>("books");
     }
 
     private async Task HandleValidSubmit()
     {
-        // Call your API to submit the book
         var response = await Http.PostAsJsonAsync("books", book);
         if (response.IsSuccessStatusCode)
         {
-            // Clear the form
-            book = new Book { PublicationDate = DateTime.Today };
-            // Refresh the book list
+            book = new Book();
             books = await Http.GetFromJsonAsync<List<Book>>("books");
         }
     }
@@ -102,23 +91,24 @@
     {
         public int Id { get; set; }
 
-        [Required]
-        [StringLength(100, MinimumLength = 2)]
+        [Required(ErrorMessage = "Title is required")]
+        [StringLength(100, MinimumLength = 2, ErrorMessage = "Title must be between 2 and 100 characters")]
         public string Title { get; set; }
 
-        [Required]
-        [StringLength(60, MinimumLength = 2)]
+        [Required(ErrorMessage = "Author is required")]
+        [StringLength(60, MinimumLength = 2, ErrorMessage = "Author name must be between 2 and 60 characters")]
         public string Author { get; set; }
 
-        [Required]
-        [RegularExpression("^[0-9]{13}$")]
+        [Required(ErrorMessage = "ISBN is required")]
+        [RegularExpression("^[0-9]{13}$", ErrorMessage = "ISBN must contain exactly 13 numeric digits")]
         public string Isbn { get; set; }
 
-        [Required]
-        public DateTime PublicationDate { get; set; }
+        [Required(ErrorMessage = "Publication date is required")]
+        [DataType(DataType.Date)]
+        public DateTime PublicationDate { get; set; } = DateTime.Today;
 
-        [Required]
-        [Range(1, 5000)]
+        [Required(ErrorMessage = "Number of pages is required")]
+        [Range(1, 5000, ErrorMessage = "Number of pages must be between 1 and 5000")]
         public int NumberOfPages { get; set; }
     }
 }

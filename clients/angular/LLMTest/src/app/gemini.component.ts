@@ -1,228 +1,192 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
-import { CommonModule, DatePipe } from '@angular/common';
+import { Component, OnInit, inject, OnDestroy } from '@angular/core';
+import { CommonModule, formatDate } from '@angular/common';
+import { FormBuilder, FormGroup, Validators, ReactiveFormsModule, AbstractControl, ValidationErrors } from '@angular/forms';
 import { HttpClient, HttpClientModule, HttpErrorResponse } from '@angular/common/http';
-import { ReactiveFormsModule, FormBuilder, FormGroup, Validators, AbstractControl, ValidationErrors, ValidatorFn } from '@angular/forms';
 import { Subscription, throwError } from 'rxjs';
-import { catchError } from 'rxjs/operators';
+import { catchError, finalize } from 'rxjs/operators';
 
-// --- Interfaces based on OpenAPI spec ---
+// --- INTERFACE ---
 interface Book {
-  id: number;
+  id?: number; // Optional: not present for new books before submission, assigned by backend
   title: string;
   author: string;
   isbn: string;
-  publication_date: string; // YYYY-MM-DD from API
+  publication_date: string; // YYYY-MM-DD
   number_of_pages: number;
 }
 
-interface BookInput {
-  title: string;
-  author: string;
-  isbn: string;
-  publication_date: string; // YYYY-MM-DD for API
-  number_of_pages: number;
+// --- CUSTOM VALIDATOR ---
+/**
+ * Custom validator to check if the date is not in the future.
+ * @param control - The AbstractControl to validate.
+ * @returns ValidationErrors | null - An error object if invalid, otherwise null.
+ */
+function notFutureDateValidator(control: AbstractControl): ValidationErrors | null {
+  if (!control.value) {
+    return null; // Let 'required' validator handle empty values
+  }
+  const inputDate = new Date(control.value);
+  const today = new Date();
+
+  // Normalize by setting time to 00:00:00.000 to compare dates only
+  inputDate.setHours(0, 0, 0, 0);
+  today.setHours(0, 0, 0, 0);
+
+  if (inputDate > today) {
+    return { futureDate: true };
+  }
+  return null;
 }
 
-// --- Custom Validator for Publication Date ---
-export function notFutureDateValidator(): ValidatorFn {
-  return (control: AbstractControl): ValidationErrors | null => {
-    if (!control.value) {
-      return null; // Handled by 'required' validator if the field is mandatory
-    }
-    // The value from <input type="date"> is a string in 'YYYY-MM-DD' format.
-    // Create Date objects for comparison, ensuring they are at the start of the day (midnight) in the local timezone.
-    const parts = control.value.split('-');
-    const year = parseInt(parts[0], 10);
-    const month = parseInt(parts[1], 10) - 1; // JavaScript Date month is 0-indexed
-    const day = parseInt(parts[2], 10);
-
-    const selectedDate = new Date(year, month, day);
-    // selectedDate is now at midnight local time for the given date.
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0); // Normalize today to the start of the day in local timezone.
-
-    if (selectedDate > today) {
-      return { futureDate: true };
-    }
-    return null;
-  };
-}
-
-// --- GeminiComponent ---
+// --- COMPONENT ---
 @Component({
-  selector: 'app-gemini', // Per instructions, component name implies class name 'GeminiComponent'
+  selector: 'app-gemini',
   standalone: true,
   imports: [
     CommonModule,
     ReactiveFormsModule,
-    HttpClientModule
+    HttpClientModule // For a standalone component, HttpClientModule needs to be imported.
+                     // In a larger app, you might use provideHttpClient() in bootstrapApplication.
   ],
-  providers: [DatePipe], // DatePipe for formatting dates in the template's data grid
   template: `
-    <div class="container">
-      <h1>Book Management</h1>
-
-      <div class="form-container" data-testid="book-form-section">
+    <div class="book-management-container">
+      <section class="form-section">
         <h2>Add New Book</h2>
         <form [formGroup]="bookForm" (ngSubmit)="onSubmit()">
           <div class="form-field">
             <label for="title">Book Title</label>
-            <input type="text" id="title" formControlName="title" data-testid="input-title" placeholder="Enter book title">
-            <div *ngIf="f['title'].invalid && (f['title'].dirty || f['title'].touched)" class="error-message" data-testid="error-title">
-              <small *ngIf="f['title'].errors?.['required']">Title is required.</small>
-              <small *ngIf="f['title'].errors?.['minlength'] || f['title'].errors?.['maxlength']">Title must be between 2 and 100 characters.</small>
+            <input id="title" type="text" formControlName="title" data-testid="input-title" placeholder="Enter book title">
+            <div *ngIf="isControlInvalid('title')" class="error-message" data-testid="error-title">
+              <span *ngIf="bookForm.get('title')?.errors?.['required']">Title is required.</span>
+              <span *ngIf="bookForm.get('title')?.errors?.['minlength'] || bookForm.get('title')?.errors?.['maxlength']">Title must be between 2 and 100 characters.</span>
             </div>
           </div>
 
           <div class="form-field">
             <label for="author">Author Name</label>
-            <input type="text" id="author" formControlName="author" data-testid="input-author" placeholder="Enter author name">
-            <div *ngIf="f['author'].invalid && (f['author'].dirty || f['author'].touched)" class="error-message" data-testid="error-author">
-              <small *ngIf="f['author'].errors?.['required']">Author name is required.</small>
-              <small *ngIf="f['author'].errors?.['minlength'] || f['author'].errors?.['maxlength']">Author name must be between 2 and 60 characters.</small>
+            <input id="author" type="text" formControlName="author" data-testid="input-author" placeholder="Enter author name">
+            <div *ngIf="isControlInvalid('author')" class="error-message" data-testid="error-author">
+              <span *ngIf="bookForm.get('author')?.errors?.['required']">Author name is required.</span>
+              <span *ngIf="bookForm.get('author')?.errors?.['minlength'] || bookForm.get('author')?.errors?.['maxlength']">Author name must be between 2 and 60 characters.</span>
             </div>
           </div>
 
           <div class="form-field">
             <label for="isbn">ISBN Number</label>
-            <input type="text" id="isbn" formControlName="isbn" data-testid="input-isbn" placeholder="Enter 13-digit ISBN number">
-            <div *ngIf="f['isbn'].invalid && (f['isbn'].dirty || f['isbn'].touched)" class="error-message" data-testid="error-isbn">
-              <small *ngIf="f['isbn'].errors?.['required']">ISBN is required.</small>
-              <small *ngIf="f['isbn'].errors?.['pattern']">ISBN must contain exactly 13 numeric digits.</small>
+            <input id="isbn" type="text" formControlName="isbn" data-testid="input-isbn" placeholder="Enter 13-digit ISBN number">
+            <div *ngIf="isControlInvalid('isbn')" class="error-message" data-testid="error-isbn">
+              <span *ngIf="bookForm.get('isbn')?.errors?.['required']">ISBN is required.</span>
+              <span *ngIf="bookForm.get('isbn')?.errors?.['pattern']">ISBN must contain exactly 13 numeric digits.</span>
             </div>
           </div>
 
           <div class="form-field">
             <label for="publication_date">Publication Date</label>
-            <input type="date" id="publication_date" formControlName="publication_date" data-testid="input-publication-date">
-            <div *ngIf="f['publication_date'].invalid && (f['publication_date'].dirty || f['publication_date'].touched)" class="error-message" data-testid="error-publication-date">
-              <small *ngIf="f['publication_date'].errors?.['required']">Publication Date is required.</small>
-              <small *ngIf="f['publication_date'].errors?.['futureDate']">Publication Date cannot be in the future.</small>
+            <input id="publication_date" type="date" formControlName="publication_date" data-testid="input-publication-date">
+            <div *ngIf="isControlInvalid('publication_date')" class="error-message" data-testid="error-publication-date">
+              <span *ngIf="bookForm.get('publication_date')?.errors?.['required']">Publication Date is required.</span>
+              <span *ngIf="bookForm.get('publication_date')?.errors?.['futureDate']">Publication Date cannot be in the future.</span>
             </div>
           </div>
 
           <div class="form-field">
             <label for="number_of_pages">Number of Pages</label>
-            <input type="number" id="number_of_pages" formControlName="number_of_pages" data-testid="input-pages" placeholder="Enter number of pages">
-            <div *ngIf="f['number_of_pages'].invalid && (f['number_of_pages'].dirty || f['number_of_pages'].touched)" class="error-message" data-testid="error-pages">
-              <small *ngIf="f['number_of_pages'].errors?.['required']">Number of pages is required.</small>
-              <small *ngIf="f['number_of_pages'].errors?.['min'] || f['number_of_pages'].errors?.['max'] || f['number_of_pages'].errors?.['pattern']">Number of pages must be between 1 and 5000.</small>
+            <input id="number_of_pages" type="number" formControlName="number_of_pages" data-testid="input-pages" placeholder="Enter number of pages">
+            <div *ngIf="isControlInvalid('number_of_pages')" class="error-message" data-testid="error-pages">
+              <span *ngIf="bookForm.get('number_of_pages')?.errors?.['required']">Number of pages is required.</span>
+              <span *ngIf="bookForm.get('number_of_pages')?.errors?.['min'] || bookForm.get('number_of_pages')?.errors?.['max']">Number of pages must be between 1 and 5000.</span>
             </div>
           </div>
 
-          <button type="submit" [disabled]="bookForm.invalid" data-testid="btn-submit-book">Add Book</button>
+          <button type="submit" data-testid="btn-submit-book" [disabled]="bookForm.invalid || submitting">Add Book</button>
+          <div *ngIf="submissionError" class="error-message submission-error">
+            Error submitting book: {{ submissionError }}
+          </div>
         </form>
-        <div *ngIf="submissionError" class="error-message api-error-message" data-testid="error-submission">
-          Failed to add book: {{ submissionError }}
-        </div>
-      </div>
+      </section>
 
-      <div class="grid-container" data-testid="data-grid-books-section">
-        <h2>Book List</h2>
-        <div *ngIf="isLoadingBooks" data-testid="loading-books-indicator">Loading books...</div>
-        <div *ngIf="!isLoadingBooks && initialLoadError" class="error-message" data-testid="error-loading-books">
-          Failed to load books: {{ initialLoadError }}
-        </div>
-        <div *ngIf="!isLoadingBooks && !initialLoadError && books.length === 0" data-testid="no-books-message">
-          No books available. Add one using the form above.
-        </div>
+      <hr class="section-divider">
 
-        <table *ngIf="!isLoadingBooks && !initialLoadError && books.length > 0" data-testid="data-grid-books">
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Title</th>
-              <th>Author</th>
-              <th>ISBN</th>
-              <th>Publication Date</th>
-              <th>Pages</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr *ngFor="let book of books" [attr.data-testid]="'data-grid-row-' + book.id">
-              <td [attr.data-testid]="'data-grid-cell-id-' + book.id">{{ book.id }}</td>
-              <td [attr.data-testid]="'data-grid-cell-title-' + book.id">{{ book.title }}</td>
-              <td [attr.data-testid]="'data-grid-cell-author-' + book.id">{{ book.author }}</td>
-              <td [attr.data-testid]="'data-grid-cell-isbn-' + book.id">{{ book.isbn }}</td>
-              <td [attr.data-testid]="'data-grid-cell-publication-date-' + book.id">{{ book.publication_date | date:'yyyy-MM-dd' }}</td>
-              <td [attr.data-testid]="'data-grid-cell-pages-' + book.id">{{ book.number_of_pages }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <section class="grid-section">
+        <h2>Book Collection</h2>
+        <div *ngIf="isLoadingBooks" class="loading-message">Loading books...</div>
+        <div *ngIf="!isLoadingBooks && books.length === 0 && !initialLoadError" class="empty-message">No books in the collection yet. Add one above!</div>
+        <div *ngIf="initialLoadError" class="error-message">Failed to load books: {{ initialLoadError }}</div>
+
+        <div *ngIf="!isLoadingBooks && books.length > 0" class="grid-container" data-testid="data-grid-books">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Title</th>
+                <th>Author</th>
+                <th>ISBN</th>
+                <th>Publication Date</th>
+                <th>Pages</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let book of books" [attr.data-testid]="'data-grid-row-' + book.id">
+                <td [attr.data-testid]="'data-grid-cell-id-' + book.id">{{ book.id }}</td>
+                <td [attr.data-testid]="'data-grid-cell-title-' + book.id">{{ book.title }}</td>
+                <td [attr.data-testid]="'data-grid-cell-author-' + book.id">{{ book.author }}</td>
+                <td [attr.data-testid]="'data-grid-cell-isbn-' + book.id">{{ book.isbn }}</td>
+                <td [attr.data-testid]="'data-grid-cell-publication-date-' + book.id">{{ book.publication_date }}</td>
+                <td [attr.data-testid]="'data-grid-cell-pages-' + book.id">{{ book.number_of_pages }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
     </div>
   `,
   styles: [`
-    :host {
-      display: block;
-      font-family: Arial, Helvetica, sans-serif;
-    }
-    .container {
+    .book-management-container {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
       margin: 20px auto;
-      padding: 0 15px;
-      max-width: 960px;
-    }
-    h1 {
-      text-align: center;
-      color: #333;
-      margin-bottom: 30px;
+      padding: 20px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      background-color: #f9f9f9;
     }
     h2 {
-      color: #444;
-      border-bottom: 2px solid #eee;
+      color: #333;
+      border-bottom: 2px solid #007bff;
       padding-bottom: 10px;
-      margin-top: 0;
       margin-bottom: 20px;
     }
-    .form-container, .grid-container {
-      background-color: #fdfdfd;
-      padding: 25px;
-      border: 1px solid #e0e0e0;
-      border-radius: 8px;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    .form-section, .grid-section {
       margin-bottom: 30px;
     }
     .form-field {
-      margin-bottom: 18px;
+      margin-bottom: 15px;
     }
-    .form-field label {
+    label {
       display: block;
-      margin-bottom: 6px;
+      margin-bottom: 5px;
       font-weight: bold;
       color: #555;
-      font-size: 0.95rem;
     }
-    .form-field input[type="text"],
-    .form-field input[type="date"],
-    .form-field input[type="number"] {
-      width: 100%;
-      padding: 10px 12px;
+    input[type="text"],
+    input[type="date"],
+    input[type="number"] {
+      width: calc(100% - 22px); /* Full width minus padding and border */
+      padding: 10px;
       border: 1px solid #ccc;
       border-radius: 4px;
-      box-sizing: border-box;
-      font-size: 1rem;
-      transition: border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+      font-size: 1em;
     }
-    .form-field input:focus {
-      border-color: #007bff;
-      box-shadow: 0 0 0 0.1rem rgba(0,123,255,.25);
-      outline: none;
+    input.ng-invalid.ng-touched {
+      border-color: #dc3545; /* Red border for invalid touched fields */
     }
     .error-message {
-      color: #dc3545; /* Bootstrap danger color */
+      color: #dc3545; /* Red color for error messages */
       font-size: 0.875em;
-      margin-top: 6px;
+      margin-top: 5px;
     }
-    .error-message small {
-      display: block; /* Ensure each validation message for a field is on a new line if needed */
-    }
-    .api-error-message {
-      margin-top: 15px;
-      padding: 10px;
-      background-color: #f8d7da;
-      border: 1px solid #f5c6cb;
-      border-radius: 4px;
+    .submission-error {
+        margin-top: 10px;
     }
     button[type="submit"] {
       padding: 10px 20px;
@@ -231,16 +195,24 @@ export function notFutureDateValidator(): ValidatorFn {
       border: none;
       border-radius: 4px;
       cursor: pointer;
-      font-size: 1.05rem;
-      transition: background-color 0.15s ease-in-out;
+      font-size: 1em;
+      transition: background-color 0.3s ease;
     }
     button[type="submit"]:hover:not(:disabled) {
       background-color: #0056b3;
     }
     button[type="submit"]:disabled {
-      background-color: #adb5bd; /* Bootstrap secondary/disabled color */
+      background-color: #ccc;
       cursor: not-allowed;
-      opacity: 0.65;
+    }
+    .section-divider {
+      border: 0;
+      height: 1px;
+      background-color: #ddd;
+      margin: 30px 0;
+    }
+    .grid-container {
+      overflow-x: auto; /* For responsiveness on smaller screens */
     }
     table {
       width: 100%;
@@ -248,21 +220,24 @@ export function notFutureDateValidator(): ValidatorFn {
       margin-top: 10px;
     }
     th, td {
-      border: 1px solid #dee2e6; /* Bootstrap table border color */
-      padding: 12px;
+      border: 1px solid #ddd;
+      padding: 10px;
       text-align: left;
       vertical-align: middle;
     }
     th {
-      background-color: #f8f9fa; /* Bootstrap light grey background */
+      background-color: #e9ecef;
       font-weight: bold;
-      color: #212529; /* Bootstrap dark text color */
+      color: #333;
     }
-    tbody tr:nth-child(even) {
-      background-color: #f9f9f9;
+    tr:nth-child(even) {
+      background-color: #f8f9fa;
     }
-    tbody tr:hover {
-      background-color: #e9ecef; /* Bootstrap hover color */
+    .loading-message, .empty-message {
+        text-align: center;
+        padding: 20px;
+        color: #555;
+        font-style: italic;
     }
   `]
 })
@@ -271,125 +246,123 @@ export class GeminiComponent implements OnInit, OnDestroy {
   books: Book[] = [];
   isLoadingBooks = false;
   initialLoadError: string | null = null;
+  submitting = false;
   submissionError: string | null = null;
 
-  private readonly apiBaseUrl = 'http://localhost:5000';
-  private componentSubscriptions = new Subscription();
-
-  constructor(
-    private fb: FormBuilder,
-    private http: HttpClient
-    // DatePipe is provided and used in the template, no need to inject here unless used in TS code
-  ) {}
+  private readonly apiBaseUrl = '/api'; // Replace with actual API base URL if different
+  private http = inject(HttpClient);
+  private fb = inject(FormBuilder);
+  private subscriptions: Subscription = new Subscription();
 
   ngOnInit(): void {
-    this.initializeForm();
-    this.fetchBooks();
+    this.initForm();
+    this.loadBooks();
   }
 
-  private initializeForm(): void {
+  private initForm(): void {
     this.bookForm = this.fb.group({
       title: ['', [Validators.required, Validators.minLength(2), Validators.maxLength(100)]],
       author: ['', [Validators.required, Validators.minLength(2), Validators.maxLength(60)]],
-      isbn: ['', [Validators.required, Validators.pattern('^[0-9]{13}$')]],
-      publication_date: [this.getFormattedTodayDateString(), [Validators.required, notFutureDateValidator()]],
-      number_of_pages: [null, [Validators.required, Validators.min(1), Validators.max(5000), Validators.pattern('^[0-9]+$')]]
+      isbn: ['', [Validators.required, Validators.pattern('^[0-9]{13}$')]], // Exactly 13 numeric digits
+      publication_date: [this.getTodayDateString(), [Validators.required, notFutureDateValidator]],
+      number_of_pages: ['', [Validators.required, Validators.min(1), Validators.max(5000)]]
     });
   }
 
-  // Getter for easy access to form controls in the template
-  get f() { return this.bookForm.controls; }
-
-  private getFormattedTodayDateString(): string {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = ('0' + (today.getMonth() + 1)).slice(-2); // Months are 0-indexed
-    const day = ('0' + today.getDate()).slice(-2);
-    return `${year}-${month}-${day}`;
+  private getTodayDateString(): string {
+    return formatDate(new Date(), 'yyyy-MM-dd', 'en-US');
   }
 
-  fetchBooks(): void {
+  isControlInvalid(controlName: string): boolean {
+    const control = this.bookForm.get(controlName);
+    return !!(control && control.invalid && (control.dirty || control.touched));
+  }
+
+  private loadBooks(): void {
     this.isLoadingBooks = true;
     this.initialLoadError = null;
-    const booksSubscription = this.http.get<Book[]>(`${this.apiBaseUrl}/books`)
+    const booksSub = this.http.get<Book[]>(`${this.apiBaseUrl}/books`)
       .pipe(
-        catchError(error => {
-          this.initialLoadError = this.extractErrorMessage(error);
-          this.isLoadingBooks = false;
-          return throwError(() => new Error(this.initialLoadError || 'Failed to load books.'));
-        })
+        catchError((error: HttpErrorResponse) => {
+          this.initialLoadError = this.formatErrorMessage(error);
+          return throwError(() => new Error('Failed to load books. ' + this.initialLoadError));
+        }),
+        finalize(() => this.isLoadingBooks = false)
       )
       .subscribe({
-        next: (booksData) => {
-          this.books = booksData; // API returns newest first as per its spec
-          this.isLoadingBooks = false;
+        next: (loadedBooks) => {
+          this.books = loadedBooks; // Assuming API returns newest first as per spec
         },
-        // Error already handled by catchError
+        error: (err) => console.error(err) // Error already handled by catchError for UI
       });
-    this.componentSubscriptions.add(booksSubscription);
+    this.subscriptions.add(booksSub);
   }
 
   onSubmit(): void {
     if (this.bookForm.invalid) {
-      this.bookForm.markAllAsTouched(); // Trigger validation messages for all fields
+      // Mark all fields as touched to display validation errors if not already shown
+      this.bookForm.markAllAsTouched();
       return;
     }
 
+    this.submitting = true;
     this.submissionError = null;
-    const bookData: BookInput = {
-      ...this.bookForm.value,
-      // Ensure number_of_pages is an integer
-      number_of_pages: parseInt(this.bookForm.value.number_of_pages, 10)
-    };
+    const newBookData = this.bookForm.value;
 
-    const addSubscription = this.http.post<Book>(`${this.apiBaseUrl}/books`, bookData)
+    const createSub = this.http.post<Book>(`${this.apiBaseUrl}/books`, newBookData)
       .pipe(
-        catchError(error => {
-          this.submissionError = this.extractErrorMessage(error);
-          return throwError(() => new Error(this.submissionError || 'Failed to submit book.'));
-        })
+        catchError((error: HttpErrorResponse) => {
+          this.submissionError = this.formatErrorMessage(error);
+          return throwError(() => new Error('Failed to submit book. ' + this.submissionError));
+        }),
+        finalize(() => this.submitting = false)
       )
       .subscribe({
-        next: (newBook) => {
-          // Add the new book to the top of the list for immediate UI update
-          this.books.unshift(newBook);
-          this.bookForm.reset();
-          // Reset publication_date to today's date after clearing
-          this.f['publication_date'].setValue(this.getFormattedTodayDateString());
-          // Optionally, to maintain pristine state for other fields:
-          // Object.keys(this.f).forEach(key => {
-          //   this.f[key].setErrors(null);
-          //   this.f[key].markAsPristine();
-          //   this.f[key].markAsUntouched();
-          // });
-          // this.bookForm.updateValueAndValidity();
+        next: (createdBook) => {
+          this.books.unshift(createdBook); // Add new book to the top of the grid
+          this.resetForm();
         },
-        // Error already handled by catchError
+        error: (err) => console.error(err) // Error already handled by catchError for UI
       });
-    this.componentSubscriptions.add(addSubscription);
+    this.subscriptions.add(createSub);
   }
 
-  private extractErrorMessage(error: HttpErrorResponse): string {
-    if (error.error) {
-      if (error.error.errors && typeof error.error.errors === 'object') {
-        // Handle ValidationErrorResponse: { errors: { fieldName: ["message1"] } }
-        const fieldErrors = Object.entries(error.error.errors)
-          .map(([field, messages]) => `${field}: ${(messages as string[]).join(', ')}`)
-          .join('; ');
-        return `Validation issues: ${fieldErrors}`;
+  private resetForm(): void {
+    this.bookForm.reset();
+    this.bookForm.patchValue({
+      publication_date: this.getTodayDateString() // Reset date to today
+    });
+    // Manually reset touched/dirty state if needed for specific UI behavior after reset
+    Object.keys(this.bookForm.controls).forEach(key => {
+        this.bookForm.get(key)?.setErrors(null) ;
+        this.bookForm.get(key)?.markAsPristine();
+        this.bookForm.get(key)?.markAsUntouched();
+    });
+    this.bookForm.updateValueAndValidity();
+  }
+
+  private formatErrorMessage(error: HttpErrorResponse): string {
+    if (error.error instanceof ErrorEvent) {
+      // Client-side or network error
+      return `Network error: ${error.error.message}`;
+    } else {
+      // Backend returned an unsuccessful response code.
+      // The response body may contain clues as to what went wrong.
+      let message = `Server error (status ${error.status}): `;
+      if (typeof error.error === 'string') {
+        message += error.error;
+      } else if (error.error && typeof error.error.message === 'string') {
+        message += error.error.message;
+      } else if (error.message) {
+        message += error.message;
+      } else {
+        message += 'Unknown server error.';
       }
-      if (error.error.error && typeof error.error.error === 'string') {
-        // Handle ErrorResponse: { error: "message" }
-        return error.error.error;
-      }
+      return message;
     }
-    if (error.message) {
-      return error.message;
-    }
-    return 'An unexpected error occurred. Please try again.';
   }
 
   ngOnDestroy(): void {
-    this.componentSubscriptions.unsubscribe();
+    this.subscriptions.unsubscribe();
   }
 }

@@ -1,10 +1,11 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ReactiveFormsModule, FormGroup, FormBuilder, Validators, AbstractControl, ValidationErrors } from '@angular/forms';
-import { HttpClientModule, HttpClient } from '@angular/common/http';
+import { FormsModule } from '@angular/forms';
+import { HttpClient, HttpClientModule } from '@angular/common/http';
+import { Observable } from 'rxjs';
 
 interface Book {
-  id: number;
+  id?: number;
   title: string;
   author: string;
   isbn: string;
@@ -12,40 +13,43 @@ interface Book {
   number_of_pages: number;
 }
 
-interface ValidationErrorResponse {
-  errors: {
-    [key: string]: string[];
-  };
+interface ValidationErrors {
+  title?: string;
+  author?: string;
+  isbn?: string;
+  publication_date?: string;
+  number_of_pages?: string;
 }
 
 @Component({
   selector: 'app-claude',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, HttpClientModule],
+  imports: [CommonModule, FormsModule, HttpClientModule],
   template: `
     <div class="container">
-      <h1>Book Management</h1>
+      <h1>Book Management System</h1>
 
       <!-- Book Entry Form -->
-      <form [formGroup]="bookForm" (ngSubmit)="onSubmit()" class="book-form">
-        <h2>Add a New Book</h2>
+      <form (ngSubmit)="onSubmit()" class="book-form">
+        <h2>Add New Book</h2>
 
         <!-- Title Field -->
         <div class="form-group">
           <label for="title">Book Title</label>
           <input
-            type="text"
             id="title"
-            formControlName="title"
-            data-testid="input-title"
+            type="text"
+            [(ngModel)]="book.title"
+            name="title"
             placeholder="Enter book title"
+            data-testid="input-title"
             (blur)="validateField('title')"
-            (input)="validateField('title')">
-          <div
-            *ngIf="formErrors.title"
-            class="error-message"
-            data-testid="error-title">
-            {{ formErrors.title }}
+            (input)="validateField('title')"
+            class="form-control"
+            [class.error]="errors.title"
+          />
+          <div class="error-message" data-testid="error-title" *ngIf="errors.title">
+            {{ errors.title }}
           </div>
         </div>
 
@@ -53,18 +57,19 @@ interface ValidationErrorResponse {
         <div class="form-group">
           <label for="author">Author Name</label>
           <input
-            type="text"
             id="author"
-            formControlName="author"
-            data-testid="input-author"
+            type="text"
+            [(ngModel)]="book.author"
+            name="author"
             placeholder="Enter author name"
+            data-testid="input-author"
             (blur)="validateField('author')"
-            (input)="validateField('author')">
-          <div
-            *ngIf="formErrors.author"
-            class="error-message"
-            data-testid="error-author">
-            {{ formErrors.author }}
+            (input)="validateField('author')"
+            class="form-control"
+            [class.error]="errors.author"
+          />
+          <div class="error-message" data-testid="error-author" *ngIf="errors.author">
+            {{ errors.author }}
           </div>
         </div>
 
@@ -72,18 +77,19 @@ interface ValidationErrorResponse {
         <div class="form-group">
           <label for="isbn">ISBN Number</label>
           <input
-            type="text"
             id="isbn"
-            formControlName="isbn"
-            data-testid="input-isbn"
+            type="text"
+            [(ngModel)]="book.isbn"
+            name="isbn"
             placeholder="Enter 13-digit ISBN number"
+            data-testid="input-isbn"
             (blur)="validateField('isbn')"
-            (input)="validateField('isbn')">
-          <div
-            *ngIf="formErrors.isbn"
-            class="error-message"
-            data-testid="error-isbn">
-            {{ formErrors.isbn }}
+            (input)="validateField('isbn')"
+            class="form-control"
+            [class.error]="errors.isbn"
+          />
+          <div class="error-message" data-testid="error-isbn" *ngIf="errors.isbn">
+            {{ errors.isbn }}
           </div>
         </div>
 
@@ -91,17 +97,18 @@ interface ValidationErrorResponse {
         <div class="form-group">
           <label for="publication_date">Publication Date</label>
           <input
-            type="date"
             id="publication_date"
-            formControlName="publication_date"
+            type="date"
+            [(ngModel)]="book.publication_date"
+            name="publication_date"
             data-testid="input-publication-date"
             (blur)="validateField('publication_date')"
-            (change)="validateField('publication_date')">
-          <div
-            *ngIf="formErrors.publication_date"
-            class="error-message"
-            data-testid="error-publication-date">
-            {{ formErrors.publication_date }}
+            (change)="validateField('publication_date')"
+            class="form-control"
+            [class.error]="errors.publication_date"
+          />
+          <div class="error-message" data-testid="error-publication-date" *ngIf="errors.publication_date">
+            {{ errors.publication_date }}
           </div>
         </div>
 
@@ -109,18 +116,19 @@ interface ValidationErrorResponse {
         <div class="form-group">
           <label for="number_of_pages">Number of Pages</label>
           <input
-            type="number"
             id="number_of_pages"
-            formControlName="number_of_pages"
-            data-testid="input-pages"
+            type="number"
+            [(ngModel)]="book.number_of_pages"
+            name="number_of_pages"
             placeholder="Enter number of pages"
+            data-testid="input-pages"
             (blur)="validateField('number_of_pages')"
-            (input)="validateField('number_of_pages')">
-          <div
-            *ngIf="formErrors.number_of_pages"
-            class="error-message"
-            data-testid="error-pages">
-            {{ formErrors.number_of_pages }}
+            (input)="validateField('number_of_pages')"
+            class="form-control"
+            [class.error]="errors.number_of_pages"
+          />
+          <div class="error-message" data-testid="error-pages" *ngIf="errors.number_of_pages">
+            {{ errors.number_of_pages }}
           </div>
         </div>
 
@@ -128,15 +136,17 @@ interface ValidationErrorResponse {
         <button
           type="submit"
           data-testid="btn-submit-book"
-          [disabled]="!bookForm.valid">
+          [disabled]="!isFormValid()"
+          class="submit-button"
+        >
           Add Book
         </button>
       </form>
 
       <!-- Book Data Grid -->
-      <div class="book-grid">
+      <div class="data-grid-container">
         <h2>Book List</h2>
-        <table data-testid="data-grid-books">
+        <table class="data-grid" data-testid="data-grid-books">
           <thead>
             <tr>
               <th>ID</th>
@@ -163,244 +173,250 @@ interface ValidationErrorResponse {
   `,
   styles: [`
     .container {
-      font-family: Arial, sans-serif;
       max-width: 1200px;
       margin: 0 auto;
       padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
     }
 
-    h1, h2 {
+    h1 {
       color: #333;
-    }
-
-    .book-form {
-      background-color: #f5f5f5;
-      padding: 20px;
-      border-radius: 5px;
       margin-bottom: 30px;
     }
 
+    h2 {
+      color: #555;
+      margin-bottom: 20px;
+    }
+
+    .book-form {
+      background: #f9f9f9;
+      padding: 30px;
+      border-radius: 8px;
+      margin-bottom: 40px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
     .form-group {
-      margin-bottom: 15px;
+      margin-bottom: 20px;
     }
 
     label {
       display: block;
       margin-bottom: 5px;
-      font-weight: bold;
+      font-weight: 500;
+      color: #555;
     }
 
-    input {
+    .form-control {
       width: 100%;
-      padding: 8px;
-      border: 1px solid #ddd;
+      padding: 10px 12px;
+      border: 2px solid #ddd;
       border-radius: 4px;
-      box-sizing: border-box;
+      font-size: 16px;
+      transition: border-color 0.3s;
+    }
+
+    .form-control:focus {
+      outline: none;
+      border-color: #4CAF50;
+    }
+
+    .form-control.error {
+      border-color: #f44336;
     }
 
     .error-message {
-      color: #d9534f;
-      font-size: 0.9em;
+      color: #f44336;
+      font-size: 14px;
       margin-top: 5px;
     }
 
-    button {
-      background-color: #5cb85c;
+    .submit-button {
+      background-color: #4CAF50;
       color: white;
+      padding: 12px 24px;
       border: none;
-      padding: 10px 15px;
       border-radius: 4px;
+      font-size: 16px;
       cursor: pointer;
+      transition: background-color 0.3s;
     }
 
-    button:hover {
-      background-color: #4cae4c;
+    .submit-button:hover:not(:disabled) {
+      background-color: #45a049;
     }
 
-    button:disabled {
-      background-color: #cccccc;
+    .submit-button:disabled {
+      background-color: #ccc;
       cursor: not-allowed;
     }
 
-    .book-grid {
-      overflow-x: auto;
+    .data-grid-container {
+      background: #f9f9f9;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
 
-    table {
+    .data-grid {
       width: 100%;
       border-collapse: collapse;
+      background: white;
     }
 
-    th, td {
-      border: 1px solid #ddd;
-      padding: 10px;
+    .data-grid th {
+      background-color: #4CAF50;
+      color: white;
+      padding: 12px;
       text-align: left;
+      font-weight: 500;
     }
 
-    th {
-      background-color: #f2f2f2;
-      font-weight: bold;
+    .data-grid td {
+      padding: 12px;
+      border-bottom: 1px solid #ddd;
     }
 
-    tr:nth-child(even) {
-      background-color: #f9f9f9;
+    .data-grid tr:nth-child(even) {
+      background-color: #f5f5f5;
+    }
+
+    .data-grid tr:hover {
+      background-color: #e8f5e9;
     }
   `]
 })
 export class ClaudeComponent implements OnInit {
-  bookForm: FormGroup;
-  books: Book[] = [];
-  formErrors: { [key: string]: string } = {};
-  private apiUrl = 'http://localhost:5000/books';
+  book: Book = {
+    title: '',
+    author: '',
+    isbn: '',
+    publication_date: '',
+    number_of_pages: 0
+  };
 
-  constructor(
-    private fb: FormBuilder,
-    private http: HttpClient
-  ) {
-    this.bookForm = this.createForm();
-  }
+  books: Book[] = [];
+  errors: ValidationErrors = {};
+
+  private apiUrl = '/books';
+
+  constructor(private http: HttpClient) {}
 
   ngOnInit(): void {
-    this.fetchBooks();
+    // Set default publication date to today
+    const today = new Date();
+    this.book.publication_date = today.toISOString().split('T')[0];
+
+    // Load existing books
+    this.loadBooks();
   }
 
-  createForm(): FormGroup {
-    const today = new Date().toISOString().split('T')[0];
-
-    return this.fb.group({
-      title: ['', [
-        Validators.required,
-        Validators.minLength(2),
-        Validators.maxLength(100)
-      ]],
-      author: ['', [
-        Validators.required,
-        Validators.minLength(2),
-        Validators.maxLength(60)
-      ]],
-      isbn: ['', [
-        Validators.required,
-        Validators.pattern('^[0-9]{13}$')
-      ]],
-      publication_date: [today, [
-        Validators.required,
-        this.futureDateValidator
-      ]],
-      number_of_pages: ['', [
-        Validators.required,
-        Validators.min(1),
-        Validators.max(5000),
-        Validators.pattern('^[0-9]*$')
-      ]]
+  loadBooks(): void {
+    this.http.get<Book[]>(this.apiUrl).subscribe({
+      next: (data) => {
+        this.books = data;
+      },
+      error: (error) => {
+        console.error('Error loading books:', error);
+      }
     });
   }
 
-  futureDateValidator(control: AbstractControl): ValidationErrors | null {
-    const inputDate = new Date(control.value);
-    const today = new Date();
+  validateField(field: keyof Book): void {
+    const value = this.book[field];
 
-    // Reset hours, minutes, seconds to make the comparison date-only
-    today.setHours(0, 0, 0, 0);
+    switch (field) {
+      case 'title':
+        if (!value || value.toString().length < 2 || value.toString().length > 100) {
+          this.errors.title = 'Title must be between 2 and 100 characters.';
+        } else {
+          delete this.errors.title;
+        }
+        break;
 
-    if (inputDate > today) {
-      return { 'futureDate': true };
+      case 'author':
+        if (!value || value.toString().length < 2 || value.toString().length > 60) {
+          this.errors.author = 'Author name must be between 2 and 60 characters.';
+        } else {
+          delete this.errors.author;
+        }
+        break;
+
+      case 'isbn':
+        if (!value || !/^\d{13}$/.test(value.toString())) {
+          this.errors.isbn = 'ISBN must contain exactly 13 numeric digits.';
+        } else {
+          delete this.errors.isbn;
+        }
+        break;
+
+      case 'publication_date':
+        if (!value) {
+          this.errors.publication_date = 'Publication Date is required.';
+        } else {
+          const selectedDate = new Date(value);
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          if (selectedDate > today) {
+            this.errors.publication_date = 'Publication Date cannot be in the future.';
+          } else {
+            delete this.errors.publication_date;
+          }
+        }
+        break;
+
+      case 'number_of_pages':
+        const pages = Number(value);
+        if (!value || pages < 1 || pages > 5000 || !Number.isInteger(pages)) {
+          this.errors.number_of_pages = 'Number of pages must be between 1 and 5000.';
+        } else {
+          delete this.errors.number_of_pages;
+        }
+        break;
     }
-
-    return null;
   }
 
-  validateField(fieldName: string): void {
-    const control = this.bookForm.get(fieldName);
-    this.formErrors[fieldName] = '';
-
-    if (control && control.invalid && (control.dirty || control.touched)) {
-      const errorMessages: { [field: string]: { [validationType: string]: string } } = {
-        title: {
-          required: 'Title is required.',
-          minlength: 'Title must be between 2 and 100 characters.',
-          maxlength: 'Title must be between 2 and 100 characters.'
-        },
-        author: {
-          required: 'Author name is required.',
-          minlength: 'Author name must be between 2 and 60 characters.',
-          maxlength: 'Author name must be between 2 and 60 characters.'
-        },
-        isbn: {
-          required: 'ISBN is required.',
-          pattern: 'ISBN must contain exactly 13 numeric digits.'
-        },
-        publication_date: {
-          required: 'Publication Date is required.',
-          futureDate: 'Publication Date cannot be in the future.'
-        },
-        number_of_pages: {
-          required: 'Number of pages is required.',
-          min: 'Number of pages must be between 1 and 5000.',
-          max: 'Number of pages must be between 1 and 5000.',
-          pattern: 'Number of pages must be an integer.'
-        }
-      };
-
-      // Get the first error
-      const errors = control.errors;
-      if (errors) {
-        const firstError = Object.keys(errors)[0];
-        this.formErrors[fieldName] = errorMessages[fieldName][firstError];
-      }
-    }
+  validateAllFields(): void {
+    const fields: (keyof Book)[] = ['title', 'author', 'isbn', 'publication_date', 'number_of_pages'];
+    fields.forEach(field => this.validateField(field));
   }
 
-  fetchBooks(): void {
-    this.http.get<Book[]>(this.apiUrl)
-      .subscribe({
-        next: (books) => {
-          this.books = books;
-        },
-        error: (error) => {
-          console.error('Error fetching books:', error);
-        }
-      });
+  isFormValid(): boolean {
+    this.validateAllFields();
+    return Object.keys(this.errors).length === 0 &&
+           this.book.title !== '' &&
+           this.book.author !== '' &&
+           this.book.isbn !== '' &&
+           this.book.publication_date !== '' &&
+           this.book.number_of_pages > 0;
   }
 
   onSubmit(): void {
-    if (this.bookForm.valid) {
-      const formValues = this.bookForm.value;
-
-      this.http.post<Book>(this.apiUrl, formValues)
-        .subscribe({
-          next: (newBook) => {
-            // Add new book to the beginning of the array
-            this.books.unshift(newBook);
-
-            // Reset the form
-            this.bookForm.reset({
-              publication_date: new Date().toISOString().split('T')[0]
-            });
-
-            // Clear form errors
-            this.formErrors = {};
-          },
-          error: (error) => {
-            console.error('Error submitting form:', error);
-
-            // Handle validation error responses from the server
-            if (error.status === 400 && error.error && error.error.errors) {
-              const validationErrors: ValidationErrorResponse = error.error;
-              Object.keys(validationErrors.errors).forEach(key => {
-                this.formErrors[key] = validationErrors.errors[key][0];
-              });
-            }
-          }
-        });
-    } else {
-      // Mark all fields as touched to trigger validation messages
-      Object.keys(this.bookForm.controls).forEach(key => {
-        const control = this.bookForm.get(key);
-        if (control) {
-          control.markAsTouched();
-          this.validateField(key);
-        }
-      });
+    if (!this.isFormValid()) {
+      return;
     }
+
+    this.http.post<Book>(this.apiUrl, this.book).subscribe({
+      next: (newBook) => {
+        // Add new book to the beginning of the list
+        this.books.unshift(newBook);
+
+        // Clear form
+        this.book = {
+          title: '',
+          author: '',
+          isbn: '',
+          publication_date: new Date().toISOString().split('T')[0],
+          number_of_pages: 0
+        };
+
+        // Clear errors
+        this.errors = {};
+      },
+      error: (error) => {
+        console.error('Error creating book:', error);
+      }
+    });
   }
 }
