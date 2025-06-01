@@ -1,0 +1,10 @@
+version: '3.8'
+
+services:
+  playwright-tests:
+    build: .
+    volumes:
+      - ./eval/test-results:/app/eval/test-results
+      - ./eval/playwright-report:/app/eval/playwright-report
+      - ./eval/test-results.md:/app/eval/test-results.md
+    command: npx playwright test
