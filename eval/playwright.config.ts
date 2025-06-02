@@ -49,6 +49,17 @@ export default defineConfig({
         baseURL: `http://localhost:8080/${path}.html`,
       },
     })),
+
+    // HTMX projects
+    ...[
+      'claude', 'o3', 'gemini', 'mistral', 'gemini-diffusion'
+    ].map(path => ({
+      name: `${path}-htmx`,
+      use: {
+        ...devices['Desktop Chrome'],
+        baseURL: `http://localhost:8081/${path}.html`,
+      },
+    })),
   ],
 
   webServer: [
@@ -75,6 +86,15 @@ export default defineConfig({
       command: 'npx http-server -p 8080',
       url: 'http://localhost:8080',
       cwd: '../clients/vanilla',
+      timeout: 100000,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    },
+    {
+      name: 'HTMX Client',
+      command: 'npx http-server -p 8081',
+      url: 'http://localhost:8081',
+      cwd: '../clients/htmx',
       timeout: 100000,
       stdout: 'pipe',
       stderr: 'pipe',

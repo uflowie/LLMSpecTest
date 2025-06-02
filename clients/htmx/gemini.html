@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Book Management</title>
+    <script src="https://unpkg.com/htmx.org@1.9.12" integrity="sha384-ujb1lZYygJmzgSwoxRggbCHcjc0rB2XoQrxeTUQyR0ETxgPuK9AGIVAUtVAPITZq" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/htmx.org/dist/ext/json-enc.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f4f4f4;
+            color: #333;
+        }
+        .container {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+        h1, h2 {
+            color: #333;
+        }
+        .form-field {
+            margin-bottom: 15px;
+        }
+        .form-field label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        .form-field input[type="text"],
+        .form-field input[type="date"],
+        .form-field input[type="number"] {
+            width: calc(100% - 22px);
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        .error-message {
+            color: red;
+            font-size: 0.9em;
+            margin-top: 4px;
+            min-height: 1em; /* Reserve space to prevent layout shifts */
+        }
+        #btn-submit-book {
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1em;
+        }
+        #btn-submit-book:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        hr {
+            margin-top: 20px;
+            margin-bottom: 20px;
+            border: 0;
+            border-top: 1px solid #eee;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Book Management</h1>
+
+    <div class="container">
+        <h2>Add New Book</h2>
+        <form id="book-form"
+              hx-post="/books"
+              hx-ext="json-enc"
+              hx-swap="none"
+              hx-on::after-request="handleBookCreationResponse(event)">
+
+            <div class="form-field">
+                <label for="input-title">Book Title</label>
+                <input type="text" id="input-title" name="title" data-testid="input-title" placeholder="Enter book title">
+                <div class="error-message" data-testid="error-title"></div>
+            </div>
+
+            <div class="form-field">
+                <label for="input-author">Author Name</label>
+                <input type="text" id="input-author" name="author" data-testid="input-author" placeholder="Enter author name">
+                <div class="error-message" data-testid="error-author"></div>
+            </div>
+
+            <div class="form-field">
+                <label for="input-isbn">ISBN Number</label>
+                <input type="text" id="input-isbn" name="isbn" data-testid="input-isbn" placeholder="Enter 13-digit ISBN number">
+                <div class="error-message" data-testid="error-isbn"></div>
+            </div>
+
+            <div class="form-field">
+                <label for="input-publication-date">Publication Date</label>
+                <input type="date" id="input-publication-date" name="publication_date" data-testid="input-publication-date">
+                <div class="error-message" data-testid="error-publication-date"></div>
+            </div>
+
+            <div class="form-field">
+                <label for="input-pages">Number of Pages</label>
+                <input type="number" id="input-pages" name="number_of_pages" data-testid="input-pages" placeholder="Enter number of pages">
+                <div class="error-message" data-testid="error-pages"></div>
+            </div>
+
+            <button type="submit" id="btn-submit-book" data-testid="btn-submit-book" disabled>Add Book</button>
+        </form>
+    </div>
+
+    <hr>
+
+    <div class="container">
+        <h2>Book Collection</h2>
+        <div id="book-grid-wrapper"
+             data-testid="data-grid-books"
+             hx-get="/books"
+             hx-trigger="load, reloadGrid from:body"
+             hx-on::after-request="if(event.detail.successful) renderBooksTable(event.detail.xhr.responseText, 'book-table-body')">
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Title</th>
+                        <th>Author</th>
+                        <th>ISBN</th>
+                        <th>Publication Date</th>
+                        <th>Pages</th>
+                    </tr>
+                </thead>
+                <tbody id="book-table-body">
+                    </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Set default publication date to today
+            const publicationDateInput = document.getElementById('input-publication-date');
+            if (publicationDateInput) {
+                publicationDateInput.value = new Date().toISOString().split('T')[0];
+            }
+
+            // Attach validation listeners
+            const form = document.getElementById('book-form');
+            const inputs = form.querySelectorAll('input[name]');
+            inputs.forEach(input => {
+                input.addEventListener('input', () => {
+                    validateField(input);
+                    checkFormValidityAndUpdateButton();
+                });
+                input.addEventListener('blur', () => {
+                    validateField(input);
+                    // checkFormValidityAndUpdateButton(); // Often good to re-check on blur too, though input might cover it
+                });
+            });
+
+            // Initial validation check for submit button state
+            checkFormValidityAndUpdateButton();
+        });
+
+        function validateField(inputElement) {
+            const fieldName = inputElement.name;
+            const value = inputElement.value.trim();
+            let errorMessage = '';
+
+            switch (fieldName) {
+                case 'title':
+                    if (!value || value.length < 2 || value.length > 100) {
+                        errorMessage = 'Title must be between 2 and 100 characters.';
+                    }
+                    break;
+                case 'author':
+                    if (!value || value.length < 2 || value.length > 60) {
+                        errorMessage = 'Author name must be between 2 and 60 characters.';
+                    }
+                    break;
+                case 'isbn':
+                    if (!value || !/^\d{13}$/.test(value)) {
+                        errorMessage = 'ISBN must contain exactly 13 numeric digits.';
+                    }
+                    break;
+                case 'publication_date':
+                    if (!value) {
+                        errorMessage = 'Publication Date is required.';
+                    } else {
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0); // Normalize today to midnight
+                        const inputDate = new Date(value + 'T00:00:00'); // Ensure date is parsed in local timezone correctly
+                        if (inputDate > today) {
+                            errorMessage = 'Publication Date cannot be in the future.';
+                        }
+                    }
+                    break;
+                case 'number_of_pages':
+                    const numPages = parseInt(value, 10);
+                    if (!value || isNaN(numPages) || numPages < 1 || numPages > 5000) {
+                        errorMessage = 'Number of pages must be between 1 and 5000.';
+                    }
+                    break;
+            }
+
+            const errorElementId = `error-${fieldName.replace('_', '-')}`;
+            const errorElement = document.querySelector(`[data-testid="${errorElementId}"]`);
+            if (errorElement) {
+                errorElement.textContent = errorMessage;
+            }
+            return errorMessage === ''; // Return true if valid, false if error
+        }
+
+        function checkFormValidityAndUpdateButton() {
+            const form = document.getElementById('book-form');
+            const inputs = form.querySelectorAll('input[name]');
+            let isFormValid = true;
+            inputs.forEach(input => {
+                // Re-validate all fields to ensure their error messages are up-to-date,
+                // and collect their validity status.
+                if (!validateField(input)) {
+                    isFormValid = false;
+                }
+            });
+            document.getElementById('btn-submit-book').disabled = !isFormValid;
+            return isFormValid;
+        }
+
+        function createBookRowElement(book) {
+            const row = document.createElement('tr');
+            row.setAttribute('data-testid', `data-grid-row-${book.id}`);
+
+            const fields = ['id', 'title', 'author', 'isbn', 'publication_date', 'number_of_pages'];
+            const testIdFields = ['id', 'title', 'author', 'isbn', 'publication-date', 'pages']; // for data-testid
+
+            fields.forEach((field, index) => {
+                const cell = document.createElement('td');
+                cell.setAttribute('data-testid', `data-grid-cell-${testIdFields[index]}-${book.id}`);
+                cell.textContent = book[field] !== undefined ? book[field] : 'N/A';
+                row.appendChild(cell);
+            });
+            return row;
+        }
+
+        function renderBooksTable(jsonResponse, tableBodyId) {
+            try {
+                const books = JSON.parse(jsonResponse);
+                const tableBody = document.getElementById(tableBodyId);
+                tableBody.innerHTML = ''; // Clear existing rows
+
+                if (Array.isArray(books)) {
+                    // The API GET /books is specified to return newest first.
+                    // So, we can append them directly as they come.
+                    books.forEach(book => {
+                        const rowElement = createBookRowElement(book);
+                        tableBody.appendChild(rowElement);
+                    });
+                } else {
+                    console.error("Expected an array of books, but received:", books);
+                    tableBody.innerHTML = '<tr><td colspan="6">Error loading books or no books found.</td></tr>';
+                }
+            } catch (error) {
+                console.error("Error parsing JSON response for book table:", error);
+                const tableBody = document.getElementById(tableBodyId);
+                tableBody.innerHTML = '<tr><td colspan="6">Error processing book data.</td></tr>';
+            }
+        }
+        
+        function handleBookCreationResponse(event) {
+            const form = document.getElementById('book-form');
+            if (event.detail.successful && (event.detail.xhr.status === 200 || event.detail.xhr.status === 201)) {
+                // Clear form inputs
+                form.reset();
+                // Reset publication date to today
+                document.getElementById('input-publication-date').value = new Date().toISOString().split('T')[0];
+                
+                // Re-validate form which should disable the button
+                checkFormValidityAndUpdateButton();
+
+                // Trigger grid reload to show the new book (newest first)
+                htmx.trigger(document.body, 'reloadGrid');
+                
+                // Optional: provide user feedback e.g. a success message
+                // alert('Book added successfully!');
+            } else if (!event.detail.successful) {
+                // Attempt to parse server error
+                let serverErrorMessage = "Error adding book. Server returned an error.";
+                try {
+                    const errorResponse = JSON.parse(event.detail.xhr.responseText);
+                    if (errorResponse && errorResponse.message) {
+                        serverErrorMessage = errorResponse.message;
+                    } else if (errorResponse && errorResponse.errors) { // Example: { errors: { title: "Too short" } }
+                        let messages = [];
+                        for (const key in errorResponse.errors) {
+                            messages.push(`${key}: ${errorResponse.errors[key]}`);
+                            // Optionally, display these errors next to fields if IDs match
+                            const errorElementId = `error-${key.replace('_', '-')}`;
+                            const errorElement = document.querySelector(`[data-testid="${errorElementId}"]`);
+                            if (errorElement) {
+                                errorElement.textContent = errorResponse.errors[key];
+                            }
+                        }
+                        serverErrorMessage = messages.join('; ');
+                        checkFormValidityAndUpdateButton(); // Re-check form validity as server might have invalidated fields
+                    }
+                } catch (e) {
+                    // Can't parse JSON error, use generic message or XHR status text
+                    serverErrorMessage = `Error adding book. Status: ${event.detail.xhr.statusText || event.detail.xhr.status}`;
+                }
+                // For now, just alert the error. A more sophisticated UI would display this better.
+                alert(`Failed to add book: ${serverErrorMessage}`);
+                checkFormValidityAndUpdateButton(); // Ensure button state is correct after server error
+            }
+        }
+
+        // --- Mock API for demonstration ---
+        // In a real scenario, these would be actual HTTP endpoints.
+        // For this single-file example, we can simulate the API.
+        // To use this mock, you'd typically intercept fetch/XHR or use a service worker.
+        // Htmx directly makes requests, so to make this demo runnable without a backend,
+        // you would need a more complex setup or a simple local server.
+        // The following code is illustrative and WON'T automatically mock htmx's requests
+        // without additional tools (like Pretender.js, MSW, or running a simple local server).
+        // For the purpose of this task, the HTML is set up to call /books.
+        // You'd need a server that implements:
+        // GET /books -> returns JSON array of books
+        // POST /books -> accepts book JSON, returns created book JSON with id
+
+        /*
+        // Example of how you might quickly set up a mock server with Node.js/Express:
+        // const express = require('express');
+        // const bodyParser = require('body-parser');
+        // const cors = require('cors');
+        // const app = express();
+        // app.use(cors());
+        // app.use(bodyParser.json());
+        // let books = [];
+        // let nextId = 1;
+        // app.get('/books', (req, res) => {
+        //     res.json([...books].reverse()); // Newest first
+        // });
+        // app.post('/books', (req, res) => {
+        //     const newBook = { ...req.body, id: nextId++ };
+        //     books.push(newBook);
+        //     res.status(201).json(newBook);
+        // });
+        // app.listen(3000, () => console.log('Mock API server running on port 3000'));
+        */
+
+    </script>
+
+</body>
+</html>

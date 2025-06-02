@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Book Management</title>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 30px;
+            margin-bottom: 30px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 5px;
+            color: #555;
+        }
+
+        input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #4CAF50;
+        }
+
+        input.error {
+            border-color: #f44336;
+        }
+
+        .error-message {
+            color: #f44336;
+            font-size: 14px;
+            margin-top: 5px;
+            display: none;
+        }
+
+        .error-message.show {
+            display: block;
+        }
+
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
+        button:not(:disabled):hover {
+            background-color: #45a049;
+        }
+
+        .data-grid {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            text-align: left;
+            padding: 12px;
+            border-bottom: 1px solid #ddd;
+        }
+
+        th {
+            background-color: #f8f9fa;
+            font-weight: 600;
+            color: #555;
+        }
+
+        tbody tr:hover {
+            background-color: #f8f9fa;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+
+            .container {
+                padding: 20px;
+            }
+
+            table {
+                font-size: 14px;
+            }
+
+            th, td {
+                padding: 8px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>Book Management System</h1>
+
+    <!-- Book Entry Form -->
+    <div class="container">
+        <h2>Add New Book</h2>
+        <form id="book-form" hx-post="/books" hx-target="#books-grid" hx-swap="innerHTML" hx-trigger="submit">
+            <div class="form-group">
+                <label for="title">Book Title</label>
+                <input 
+                    type="text" 
+                    id="title" 
+                    name="title" 
+                    data-testid="input-title" 
+                    placeholder="Enter book title"
+                    required
+                >
+                <div class="error-message" data-testid="error-title"></div>
+            </div>
+
+            <div class="form-group">
+                <label for="author">Author Name</label>
+                <input 
+                    type="text" 
+                    id="author" 
+                    name="author" 
+                    data-testid="input-author" 
+                    placeholder="Enter author name"
+                    required
+                >
+                <div class="error-message" data-testid="error-author"></div>
+            </div>
+
+            <div class="form-group">
+                <label for="isbn">ISBN Number</label>
+                <input 
+                    type="text" 
+                    id="isbn" 
+                    name="isbn" 
+                    data-testid="input-isbn" 
+                    placeholder="Enter 13-digit ISBN number"
+                    required
+                >
+                <div class="error-message" data-testid="error-isbn"></div>
+            </div>
+
+            <div class="form-group">
+                <label for="publication_date">Publication Date</label>
+                <input 
+                    type="date" 
+                    id="publication_date" 
+                    name="publication_date" 
+                    data-testid="input-publication-date"
+                    required
+                >
+                <div class="error-message" data-testid="error-publication-date"></div>
+            </div>
+
+            <div class="form-group">
+                <label for="number_of_pages">Number of Pages</label>
+                <input 
+                    type="number" 
+                    id="number_of_pages" 
+                    name="number_of_pages" 
+                    data-testid="input-pages" 
+                    placeholder="Enter number of pages"
+                    required
+                >
+                <div class="error-message" data-testid="error-pages"></div>
+            </div>
+
+            <button type="submit" data-testid="btn-submit-book" disabled>Add Book</button>
+        </form>
+    </div>
+
+    <!-- Books Data Grid -->
+    <div class="container">
+        <h2>Book List</h2>
+        <div class="data-grid" data-testid="data-grid-books">
+            <div id="books-grid" hx-get="/books" hx-trigger="load">
+                <div class="loading">Loading books...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Set default publication date to today
+        document.addEventListener('DOMContentLoaded', function() {
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('publication_date').value = today;
+            
+            // Initial load of books
+            htmx.trigger(document.getElementById('books-grid'), 'load');
+        });
+
+        // Validation rules
+        const validationRules = {
+            title: {
+                validate: (value) => value.length >= 2 && value.length <= 100,
+                message: 'Title must be between 2 and 100 characters.'
+            },
+            author: {
+                validate: (value) => value.length >= 2 && value.length <= 60,
+                message: 'Author name must be between 2 and 60 characters.'
+            },
+            isbn: {
+                validate: (value) => /^\d{13}$/.test(value),
+                message: 'ISBN must contain exactly 13 numeric digits.'
+            },
+            publication_date: {
+                validate: (value) => {
+                    if (!value) return false;
+                    const inputDate = new Date(value);
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    return inputDate <= today;
+                },
+                message: 'Publication Date cannot be in the future.'
+            },
+            number_of_pages: {
+                validate: (value) => {
+                    const num = parseInt(value);
+                    return num >= 1 && num <= 5000;
+                },
+                message: 'Number of pages must be between 1 and 5000.'
+            }
+        };
+
+        // Form validation state
+        const formState = {
+            title: false,
+            author: false,
+            isbn: false,
+            publication_date: true, // Default is today, which is valid
+            number_of_pages: false
+        };
+
+        // Validate field
+        function validateField(fieldName, value) {
+            const rule = validationRules[fieldName];
+            const isValid = rule.validate(value);
+            const errorElement = document.querySelector(`[data-testid="error-${fieldName === 'number_of_pages' ? 'pages' : fieldName}"]`);
+            const inputElement = document.querySelector(`[data-testid="input-${fieldName === 'number_of_pages' ? 'pages' : fieldName}"]`);
+            
+            if (isValid) {
+                errorElement.textContent = '';
+                errorElement.classList.remove('show');
+                inputElement.classList.remove('error');
+                formState[fieldName] = true;
+            } else {
+                errorElement.textContent = rule.message;
+                errorElement.classList.add('show');
+                inputElement.classList.add('error');
+                formState[fieldName] = false;
+            }
+            
+            updateSubmitButton();
+        }
+
+        // Update submit button state
+        function updateSubmitButton() {
+            const submitButton = document.querySelector('[data-testid="btn-submit-book"]');
+            const allValid = Object.values(formState).every(v => v === true);
+            submitButton.disabled = !allValid;
+        }
+
+        // Add event listeners for validation
+        ['title', 'author', 'isbn', 'publication_date', 'number_of_pages'].forEach(fieldName => {
+            const inputElement = document.querySelector(`[name="${fieldName}"]`);
+            
+            inputElement.addEventListener('blur', () => {
+                validateField(fieldName, inputElement.value);
+            });
+            
+            inputElement.addEventListener('input', () => {
+                validateField(fieldName, inputElement.value);
+            });
+        });
+
+        // Handle form submission
+        document.getElementById('book-form').addEventListener('htmx:afterRequest', function(event) {
+            if (event.detail.successful) {
+                // Clear form
+                this.reset();
+                
+                // Reset validation state
+                Object.keys(formState).forEach(key => {
+                    formState[key] = false;
+                });
+                formState.publication_date = true;
+                
+                // Set publication date back to today
+                const today = new Date().toISOString().split('T')[0];
+                document.getElementById('publication_date').value = today;
+                
+                // Clear any error messages
+                document.querySelectorAll('.error-message').forEach(el => {
+                    el.textContent = '';
+                    el.classList.remove('show');
+                });
+                
+                // Remove error styling
+                document.querySelectorAll('input.error').forEach(el => {
+                    el.classList.remove('error');
+                });
+                
+                // Update submit button
+                updateSubmitButton();
+                
+                // Reload the books grid
+                htmx.trigger(document.getElementById('books-grid'), 'load');
+            }
+        });
+
+        // Custom HTMX extension to transform the books data into HTML
+        htmx.defineExtension('books-renderer', {
+            transformResponse: function(text, xhr, elt) {
+                try {
+                    const books = JSON.parse(text);
+                    if (Array.isArray(books)) {
+                        if (books.length === 0) {
+                            return '<p>No books found.</p>';
+                        }
+                        
+                        let html = '<table><thead><tr>';
+                        html += '<th>ID</th><th>Title</th><th>Author</th><th>ISBN</th><th>Publication Date</th><th>Pages</th>';
+                        html += '</tr></thead><tbody>';
+                        
+                        books.forEach(book => {
+                            html += `<tr data-testid="data-grid-row-${book.id}">`;
+                            html += `<td data-testid="data-grid-cell-id-${book.id}">${book.id}</td>`;
+                            html += `<td data-testid="data-grid-cell-title-${book.id}">${book.title}</td>`;
+                            html += `<td data-testid="data-grid-cell-author-${book.id}">${book.author}</td>`;
+                            html += `<td data-testid="data-grid-cell-isbn-${book.id}">${book.isbn}</td>`;
+                            html += `<td data-testid="data-grid-cell-publication-date-${book.id}">${book.publication_date}</td>`;
+                            html += `<td data-testid="data-grid-cell-pages-${book.id}">${book.number_of_pages}</td>`;
+                            html += '</tr>';
+                        });
+                        
+                        html += '</tbody></table>';
+                        return html;
+                    }
+                    return text;
+                } catch (e) {
+                    return text;
+                }
+            }
+        });
+
+        // Register the extension for the books grid
+        document.getElementById('books-grid').setAttribute('hx-ext', 'books-renderer');
+    </script>
+</body>
+</html>

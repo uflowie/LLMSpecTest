@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Book Management</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 20px;
+        }
+        .form-container {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            box-sizing: border-box;
+        }
+        .error-message {
+            color: red;
+            font-size: 0.9em;
+            margin-top: 3px;
+        }
+        .submit-button {
+            padding: 10px 15px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        .submit-button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .data-grid {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        .data-grid th, .data-grid td {
+            border: 1px solid #ccc;
+            padding: 8px;
+            text-align: left;
+        }
+        .data-grid th {
+            background-color: #f2f2f2;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Book Management</h1>
+
+    <div class="form-container">
+        <h2>Add New Book</h2>
+        <form id="book-form" htmx-post="/books" htmx-target="#book-grid" htmx-swap="afterbegin" htmx-indicator="#loading-indicator">
+            <div class="form-group">
+                <label for="input-title">Book Title</label>
+                <input type="text" id="input-title" name="title" data-testid="input-title" placeholder="Enter book title" required>
+                <div class="error-message" data-testid="error-title"></div>
+            </div>
+            <div class="form-group">
+                <label for="input-author">Author Name</label>
+                <input type="text" id="input-author" name="author" data-testid="input-author" placeholder="Enter author name" required>
+                <div class="error-message" data-testid="error-author"></div>
+            </div>
+            <div class="form-group">
+                <label for="input-isbn">ISBN Number</label>
+                <input type="text" id="input-isbn" name="isbn" data-testid="input-isbn" placeholder="Enter 13-digit ISBN number" required>
+                <div class="error-message" data-testid="error-isbn"></div>
+            </div>
+            <div class="form-group">
+                <label for="input-publication-date">Publication Date</label>
+                <input type="date" id="input-publication-date" name="publication_date" data-testid="input-publication-date" required>
+                <div class="error-message" data-testid="error-publication-date"></div>
+            </div>
+            <div class="form-group">
+                <label for="input-pages">Number of Pages</label>
+                <input type="number" id="input-pages" name="number_of_pages" data-testid="input-pages" placeholder="Enter number of pages" min="1" max="5000" required>
+                <div class="error-message" data-testid="error-pages"></div>
+            </div>
+
+            <button type="submit" class="submit-button" data-testid="btn-submit-book" disabled>Add Book</button>
+            <span id="loading-indicator" style="display: none;">Loading...</span>
+        </form>
+    </div>
+
+    <h2>Book List</h2>
+    <div id="book-grid" data-testid="data-grid-books" htmx-get="/books" htmx-trigger="load" htmx-swap="innerHTML">
+        <table class="data-grid">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Title</th>
+                    <th>Author</th>
+                    <th>ISBN</th>
+                    <th>Publication Date</th>
+                    <th>Pages</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Book data rows will be loaded here by htmx -->
+            </tbody>
+        </table>
+    </div>
+
+    <script src="https://unpkg.com/htmx.org@1.9.6"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.getElementById('book-form');
+            const submitButton = form.querySelector('[data-testid="btn-submit-book"]');
+            const inputs = form.querySelectorAll('input[required]');
+            const errors = {};
+
+            function validateInput(input) {
+                const name = input.name;
+                const value = input.value;
+                const errorElement = form.querySelector(`[data-testid="error-${name}"]`);
+                let errorMessage = '';
+
+                switch (name) {
+                    case 'title':
+                        if (!value || value.length < 2 || value.length > 100) {
+                            errorMessage = 'Title must be between 2 and 100 characters.';
+                        }
+                        break;
+                    case 'author':
+                        if (!value || value.length < 2 || value.length > 60) {
+                            errorMessage = 'Author name must be between 2 and 60 characters.';
+                        }
+                        break;
+                    case 'isbn':
+                        if (!value || !/^\d{13}$/.test(value)) {
+                            errorMessage = 'ISBN must contain exactly 13 numeric digits.';
+                        }
+                        break;
+                    case 'publication_date':
+                        if (value) {
+                            const inputDate = new Date(value);
+                            const today = new Date();
+                            today.setHours(0, 0, 0, 0);
+                            if (inputDate > today) {
+                                errorMessage = 'Publication Date cannot be in the future.';
+                            }
+                        }
+                        break;
+                    case 'number_of_pages':
+                        const pages = parseInt(value, 10);
+                        if (isNaN(pages) || pages < 1 || pages > 5000) {
+                            errorMessage = 'Number of pages must be between 1 and 5000.';
+                        }
+                        break;
+                }
+
+                errors[name] = errorMessage;
+                if (errorElement) {
+                    errorElement.textContent = errorMessage;
+                }
+                return errorMessage === '';
+            }
+
+            function checkFormValidity() {
+                let allValid = true;
+                inputs.forEach(input => {
+                    if (!validateInput(input)) {
+                        allValid = false;
+                    }
+                });
+                submitButton.disabled = !allValid;
+            }
+
+            inputs.forEach(input => {
+                input.addEventListener('blur', () => {
+                    validateInput(input);
+                    checkFormValidity();
+                });
+                input.addEventListener('input', () => {
+                    validateInput(input);
+                    checkFormValidity();
+                });
+            });
+
+            // Set default publication date to today
+            const dateInput = document.getElementById('input-publication-date');
+            if (dateInput) {
+                const today = new Date().toISOString().split('T')[0];
+                dateInput.value = today;
+            }
+
+            // Initial check on page load
+            checkFormValidity();
+
+            // Handle successful htmx submission
+            form.addEventListener('htmx.afterOnLoad', function(evt) {
+                if (evt.detail.xhr && evt.detail.xhr.status === 201) {
+                    // Clear form inputs
+                    form.reset();
+                    
+                    // Reset publication date to default
+                    if (dateInput) {
+                        dateInput.value = new Date().toISOString().split('T')[0];
+                    }
+                    
+                    // Clear error messages
+                    inputs.forEach(input => {
+                        const errorElement = form.querySelector(`[data-testid="error-${input.name}"]`);
+                        if (errorElement) {
+                            errorElement.textContent = '';
+                        }
+                        errors[input.name] = '';
+                    });
+
+                    // Re-check form validity after clearing
+                    checkFormValidity();
+                }
+            });
+
+            // Handle loading indicator
+            document.addEventListener('htmx.beforeRequest', function(evt) {
+                if (evt.detail.elt === form) {
+                    document.getElementById('loading-indicator').style.display = 'inline';
+                }
+            });
+            document.addEventListener('htmx.afterRequest', function(evt) {
+                if (evt.detail.elt === form) {
+                    document.getElementById('loading-indicator').style.display = 'none';
+                }
+            });
+        });
+    </script>
+
+</body>
+</html>

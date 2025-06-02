@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Book Management</title>
+  <!-- htmx core and JSON extension -->
+  <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+  <script src="https://unpkg.com/htmx.org@1.9.10/dist/ext/json-enc.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 2rem; }
+    form { margin-bottom: 2rem; max-width: 600px; }
+    form > div { margin-bottom: 1rem; display: flex; flex-direction: column; }
+    label { font-weight: bold; margin-bottom: 0.25rem; }
+    input { padding: 0.5rem; font-size: 1rem; }
+    .error { color: crimson; font-size: 0.875rem; min-height: 1.25rem; }
+    button[disabled] { opacity: 0.5; cursor: not-allowed; }
+    table { width: 100%; border-collapse: collapse; }
+    thead th { text-align: left; border-bottom: 2px solid #ccc; padding: 0.5rem; }
+    tbody td { padding: 0.5rem; border-bottom: 1px solid #eee; }
+  </style>
+</head>
+<body>
+  <h1>Book Management</h1>
+
+  <!-- Book Entry Form -->
+  <form id="book-form"
+        hx-post="/books"
+        hx-ext="json-enc"
+        hx-trigger="submit"
+        hx-on="htmx:afterRequest: handleAfterRequest(event)"
+  >
+    <div>
+      <label for="title">Book Title</label>
+      <input id="title" name="title" type="text" placeholder="Enter book title"
+             data-testid="input-title" required minlength="2" maxlength="100">
+      <span class="error" data-testid="error-title"></span>
+    </div>
+
+    <div>
+      <label for="author">Author Name</label>
+      <input id="author" name="author" type="text" placeholder="Enter author name"
+             data-testid="input-author" required minlength="2" maxlength="60">
+      <span class="error" data-testid="error-author"></span>
+    </div>
+
+    <div>
+      <label for="isbn">ISBN Number</label>
+      <input id="isbn" name="isbn" type="text" placeholder="Enter 13-digit ISBN number"
+             data-testid="input-isbn" required pattern="\d{13}" maxlength="13">
+      <span class="error" data-testid="error-isbn"></span>
+    </div>
+
+    <div>
+      <label for="publication_date">Publication Date</label>
+      <input id="publication_date" name="publication_date" type="date"
+             data-testid="input-publication-date" required>
+      <span class="error" data-testid="error-publication-date"></span>
+    </div>
+
+    <div>
+      <label for="number_of_pages">Number of Pages</label>
+      <input id="number_of_pages" name="number_of_pages" type="number" min="1" max="5000"
+             placeholder="Enter number of pages" data-testid="input-pages" required>
+      <span class="error" data-testid="error-pages"></span>
+    </div>
+
+    <button type="submit" id="submit-btn" data-testid="btn-submit-book" disabled>Add Book</button>
+  </form>
+
+  <!-- Data Grid -->
+  <table data-testid="data-grid-books">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Title</th>
+        <th>Author</th>
+        <th>ISBN</th>
+        <th>Publication Date</th>
+        <th>Pages</th>
+      </tr>
+    </thead>
+    <tbody id="books-table-body"></tbody>
+  </table>
+
+  <script>
+    // --- Validation Helpers -------------------------------------------------
+    const titleInput = document.getElementById('title');
+    const authorInput = document.getElementById('author');
+    const isbnInput = document.getElementById('isbn');
+    const pubDateInput = document.getElementById('publication_date');
+    const pagesInput = document.getElementById('number_of_pages');
+    const submitBtn = document.getElementById('submit-btn');
+
+    // Set publication date default to today (YYYY-MM-DD)
+    pubDateInput.value = new Date().toISOString().split('T')[0];
+
+    function setError(fieldId, message) {
+      const errorEl = document.querySelector(`[data-testid="error-${fieldId}"]`);
+      errorEl.textContent = message || '';
+    }
+
+    function validateTitle() {
+      const v = titleInput.value.trim();
+      if (v.length < 2 || v.length > 100) {
+        setError('title', 'Title must be between 2 and 100 characters.');
+        return false;
+      }
+      setError('title', '');
+      return true;
+    }
+
+    function validateAuthor() {
+      const v = authorInput.value.trim();
+      if (v.length < 2 || v.length > 60) {
+        setError('author', 'Author name must be between 2 and 60 characters.');
+        return false;
+      }
+      setError('author', '');
+      return true;
+    }
+
+    function validateISBN() {
+      const v = isbnInput.value.trim();
+      if (!/^\d{13}$/.test(v)) {
+        setError('isbn', 'ISBN must contain exactly 13 numeric digits.');
+        return false;
+      }
+      setError('isbn', '');
+      return true;
+    }
+
+    function validatePubDate() {
+      const v = pubDateInput.value;
+      const today = new Date().toISOString().split('T')[0];
+      if (!v || v > today) {
+        setError('publication-date', 'Publication Date cannot be in the future.');
+        return false;
+      }
+      setError('publication-date', '');
+      return true;
+    }
+
+    function validatePages() {
+      const v = pagesInput.value;
+      const n = parseInt(v, 10);
+      if (!(n >= 1 && n <= 5000)) {
+        setError('pages', 'Number of pages must be between 1 and 5000.');
+        return false;
+      }
+      setError('pages', '');
+      return true;
+    }
+
+    function validateForm() {
+      const ok = [
+        validateTitle(),
+        validateAuthor(),
+        validateISBN(),
+        validatePubDate(),
+        validatePages()
+      ].every(Boolean);
+      submitBtn.disabled = !ok;
+    }
+
+    // Validate on input and blur events
+    document.getElementById('book-form').addEventListener('input', validateForm);
+    document.getElementById('book-form').addEventListener('blur', validateForm, true);
+
+    // --- Data Grid Helpers --------------------------------------------------
+    function renderRow(book) {
+      /*
+       * Creates a <tr> element with cells containing book data
+       * and the required data-testid attributes.
+       */
+      const tr = document.createElement('tr');
+      tr.setAttribute('data-testid', `data-grid-row-${book.id}`);
+
+      function addCell(text, testid) {
+        const td = document.createElement('td');
+        td.textContent = text;
+        td.setAttribute('data-testid', testid);
+        tr.appendChild(td);
+      }
+
+      addCell(book.id, `data-grid-cell-id-${book.id}`);
+      addCell(book.title, `data-grid-cell-title-${book.id}`);
+      addCell(book.author, `data-grid-cell-author-${book.id}`);
+      addCell(book.isbn, `data-grid-cell-isbn-${book.id}`);
+      addCell(book.publication_date, `data-grid-cell-publication-date-${book.id}`);
+      addCell(book.number_of_pages, `data-grid-cell-pages-${book.id}`);
+
+      return tr;
+    }
+
+    function prependRow(book) {
+      const tbody = document.getElementById('books-table-body');
+      const newRow = renderRow(book);
+      tbody.prepend(newRow);
+    }
+
+    // --- API Interaction ----------------------------------------------------
+    async function loadBooks() {
+      try {
+        const res = await fetch('/books');
+        if (!res.ok) throw new Error('Failed to fetch books');
+        const books = await res.json();
+        const tbody = document.getElementById('books-table-body');
+        tbody.innerHTML = '';
+        books.forEach(book => tbody.appendChild(renderRow(book)));
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    function handleAfterRequest(evt) {
+      // Filter only the POST /books request
+      const cfg = evt.detail.requestConfig;
+      if (cfg.method !== 'POST' || cfg.path !== '/books') return;
+
+      const xhr = evt.detail.xhr;
+      if (xhr.status !== 201 && xhr.status !== 200) return;
+
+      try {
+        const book = JSON.parse(xhr.responseText);
+        prependRow(book);
+        // Clear form and reset default date
+        document.getElementById('book-form').reset();
+        pubDateInput.value = new Date().toISOString().split('T')[0];
+        validateForm();
+      } catch (e) {
+        console.error('Failed to parse response', e);
+      }
+    }
+
+    // Initial load
+    document.addEventListener('DOMContentLoaded', () => {
+      loadBooks();
+      validateForm(); // Ensure submit button is correctly disabled on first render
+    });
+  </script>
+</body>
+</html>
