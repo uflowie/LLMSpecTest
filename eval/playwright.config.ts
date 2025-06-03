@@ -60,6 +60,17 @@ export default defineConfig({
         baseURL: `http://localhost:8081/${path}.html`,
       },
     })),
+
+    // React projects
+    ...[
+      'claude', 'o3', 'gemini', 'mistral', 'gemini-diffusion'
+    ].map(path => ({
+      name: `${path}-react`,
+      use: {
+        ...devices['Desktop Chrome'],
+        baseURL: `http://localhost:5173/${path}`,
+      },
+    })),
   ],
 
   webServer: [
@@ -95,6 +106,15 @@ export default defineConfig({
       command: 'npx http-server -p 8081',
       url: 'http://localhost:8081',
       cwd: '../clients/htmx',
+      timeout: 100000,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    },
+    {
+      name: 'React Client',
+      command: 'npm run dev',
+      url: 'http://localhost:5173',
+      cwd: '../clients/react',
       timeout: 100000,
       stdout: 'pipe',
       stderr: 'pipe',
